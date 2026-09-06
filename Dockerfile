@@ -7,7 +7,7 @@ COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app .
 COPY assets/toolmigo-logo.jpeg static/img/toolmigo-logo.jpeg
-RUN mkdir -p /app/staticfiles /app/media && chown -R crm:crm /app
+RUN mkdir -p /app/staticfiles /app/media /app/backups && chown -R crm:crm /app && chown root:root /app/staticfiles /app/media /app/backups
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod 755 /entrypoint.sh
 EXPOSE 8000

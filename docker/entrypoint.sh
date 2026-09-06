@@ -1,11 +1,22 @@
 #!/bin/sh
 set -eu
-chown crm:crm /app/media /app/backups
+mkdir -p /app/media /app/backups
+drop_privileges=0
+if chown crm:crm /app/staticfiles /app/media /app/backups 2>/dev/null && setpriv --reuid=crm --regid=crm --init-groups -- true 2>/dev/null; then
+  drop_privileges=1
+fi
 run_as_crm() {
-  setpriv --reuid=crm --regid=crm --init-groups -- "$@"
+  if [ "$drop_privileges" -eq 1 ]; then
+    setpriv --reuid=crm --regid=crm --init-groups -- "$@"
+  else
+    "$@"
+  fi
 }
 if [ "$#" -gt 0 ]; then
-  exec setpriv --reuid=crm --regid=crm --init-groups -- "$@"
+  if [ "$drop_privileges" -eq 1 ]; then
+    exec setpriv --reuid=crm --regid=crm --init-groups -- "$@"
+  fi
+  exec "$@"
 fi
 attempt=1
 until run_as_crm python manage.py migrate --noinput; do
@@ -19,4 +30,7 @@ until run_as_crm python manage.py migrate --noinput; do
 done
 run_as_crm python manage.py collectstatic --noinput
 run_as_crm python manage.py bootstrap
-exec setpriv --reuid=crm --regid=crm --init-groups -- gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout 60 --access-logfile - --error-logfile -
+if [ "$drop_privileges" -eq 1 ]; then
+  exec setpriv --reuid=crm --regid=crm --init-groups -- gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout 60 --access-logfile - --error-logfile -
+fi
+exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout 60 --access-logfile - --error-logfile -

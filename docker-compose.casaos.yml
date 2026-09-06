@@ -2,7 +2,7 @@ name: toolmigo-crm
 
 services:
   app:
-    image: ghcr.io/VUL-HIER-JE-GITHUB-NAAM/toolmigo-crm:latest
+    image: ghcr.io/toolmigo/toolmigo-crm:latest
     container_name: toolmigo-crm-app
     restart: unless-stopped
     depends_on:

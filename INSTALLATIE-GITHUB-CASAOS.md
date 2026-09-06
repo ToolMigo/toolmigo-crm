@@ -15,11 +15,10 @@ Controleer de voortgang via **GitHub → Actions**. Open na voltooiing het packa
 
 Open `docker-compose.casaos.yml` en vervang:
 
-1. `VUL-HIER-JE-GITHUB-NAAM` door je GitHub-gebruikersnaam, volledig in kleine letters.
-2. Beide databasewachtwoord-velden door exact hetzelfde sterke wachtwoord.
-3. De geheime sleutel door de uitvoer van `openssl rand -base64 64`.
-4. Het beheerdersadres en beheerderswachtwoord.
-5. `192.168.178.72` wanneer het IP-adres van CasaOS later verandert.
+1. Beide databasewachtwoord-velden door exact hetzelfde sterke wachtwoord.
+2. De geheime sleutel door de uitvoer van `openssl rand -base64 64`.
+3. Het beheerdersadres en beheerderswachtwoord.
+4. `192.168.178.72` wanneer het IP-adres van CasaOS later verandert.
 
 Sla een composebestand met echte geheimen niet opnieuw op in GitHub.
 

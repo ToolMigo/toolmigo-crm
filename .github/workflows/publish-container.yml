@@ -43,7 +43,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: |
             ${{ steps.image.outputs.name }}:latest
-            ${{ steps.image.outputs.name }}:1.0.0
+            ${{ steps.image.outputs.name }}:1.1.0
           labels: |
             org.opencontainers.image.title=ToolMigo CRM
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

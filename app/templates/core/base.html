@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="{% static 'css/topbar.css' %}">
 <link rel="stylesheet" href="{% static 'css/email-settings.css' %}">
 <link rel="stylesheet" href="{% static 'css/delete-actions.css' %}">
+<link rel="stylesheet" href="{% static 'css/overview.css' %}">
 </head>
 <body>
 <div class="app-shell">
@@ -29,12 +30,16 @@
 <i>⌂</i>Dashboard</a>
 <a {% if 'customer' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'customer_list' %}">
 <i>♙</i>Klanten</a>
+<a {% if 'opportunity' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'opportunity_list' %}"><i>◇</i>Verkoop</a>
+<a {% if 'project' in request.resolver_match.url_name or 'time_entry' in request.resolver_match.url_name or 'mileage' in request.resolver_match.url_name or 'expense' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'project_list' %}"><i>▣</i>Projecten</a>
 <a {% if 'quote' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'quote_list' %}">
 <i>▤</i>Offertes</a>
 <a {% if 'invoice' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'invoice_list' %}">
 <i>€</i>Facturen</a>
 <a {% if request.resolver_match.url_name == 'outbox' %}class="active"{% endif %} href="{% url 'outbox' %}">
 <i>↗</i>Verzending</a>
+{% if active_membership.role == 'owner' or active_membership.role == 'approver' %}<a {% if 'reminder_list' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'reminder_list' %}"><i>!</i>Herinneringen</a>{% endif %}
+{% if active_membership.role == 'owner' or active_membership.role == 'approver' %}<a {% if request.resolver_match.url_name == 'reports' %}class="active"{% endif %} href="{% url 'reports' %}"><i>⌁</i>Rapportages</a>{% endif %}
 <a {% if request.resolver_match.url_name == 'calendar' or 'appointment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'calendar' %}">
 <i>□</i>Agenda</a>
 <a {% if request.resolver_match.url_name == 'board_list' or request.resolver_match.url_name == 'board_create' or request.resolver_match.url_name == 'board_detail' or 'task' in request.resolver_match.url_name or 'checklist' in request.resolver_match.url_name or 'column' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'board_list' %}">
@@ -42,9 +47,15 @@
 </a>{% if active_membership.role == 'owner' %}<span class="nav-label">Beheer</span>
 <a {% if 'product' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'product_list' %}">
 <i>◇</i>Producten</a>
+<a {% if 'organization_settings' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'organization_settings' %}"><i>⌘</i>Bedrijfsprofiel</a>
 <a {% if 'team' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'team' %}">
 <i>♧</i>Team</a>
-<a {% if request.resolver_match.url_name == 'email_settings' %}class="active"{% endif %} href="{% url 'email_settings' %}"><i>✉</i>E-mailinstellingen</a>{% endif %}</nav>
+<a {% if request.resolver_match.url_name == 'email_settings' %}class="active"{% endif %} href="{% url 'email_settings' %}"><i>✉</i>E-mailinstellingen</a>
+<a {% if request.resolver_match.url_name == 'reminder_settings' or request.resolver_match.url_name == 'email_template_edit' %}class="active"{% endif %} href="{% url 'reminder_settings' %}"><i>⌁</i>Financiële automatisering</a>
+<a {% if request.resolver_match.url_name == 'bookkeeping_export' %}class="active"{% endif %} href="{% url 'bookkeeping_export' %}"><i>⇩</i>Boekhoudexport</a>
+<a {% if 'backup' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'backups' %}"><i>↻</i>Back-ups</a>
+<a {% if 'trash' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'trash' %}"><i>♲</i>Prullenbak</a>
+<a {% if request.resolver_match.url_name == 'system_info' %}class="active"{% endif %} href="{% url 'system_info' %}"><i>ⓘ</i>Systeem{% if available_version != app_version %}<em>UPDATE</em>{% endif %}</a>{% endif %}</nav>
 <div class="sidebar-foot">
 <div class="org-avatar">{{ active_organization.name|slice:':1' }}</div>
 <div>
@@ -60,6 +71,7 @@
 <small>WERKOMGEVING</small>
 <b>{{ active_organization.name }}</b>
 </div>
+<form class="top-search" method="get" action="{% url 'global_search' %}"><input name="q" value="{{ request.GET.q }}" minlength="2" placeholder="Zoek in de CRM…" aria-label="Zoeken"><button aria-label="Zoeken">⌕</button></form>
 <div class="user">
 <button class="theme-toggle" type="button" aria-label="Wissel kleurmodus" title="Light/Dark mode">
 <span class="sun">☀</span>
@@ -75,6 +87,7 @@
 <main>
 {% if messages %}<div class="messages">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
 {% block content %}{% endblock %}</main>
+<footer class="app-footer">ToolMigo CRM · versie {{ app_version|default:'lokaal' }}</footer>
 </section>
 </div>
 <script src="{% static 'js/theme.js' %}">

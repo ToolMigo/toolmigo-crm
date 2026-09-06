@@ -1,0 +1,7 @@
+.top-search{display:flex;width:min(360px,30vw);margin-left:auto;margin-right:24px}
+.top-search input{width:100%;border:1px solid var(--border);border-radius:10px 0 0 10px;padding:9px 12px;background:#f8faf9}
+.top-search button{border:1px solid var(--border);border-left:0;border-radius:0 10px 10px 0;background:var(--mint-light);cursor:pointer}
+.activity-row{text-decoration:none}
+.app-footer{text-align:center;color:var(--muted);font-size:10px;padding:12px 30px 24px}
+@media(max-width:700px){.top-search{width:100%;margin:0 12px}.top-search input{min-width:0}}
+.sidebar{overflow-y:auto}.sidebar-foot{flex:none;margin-top:24px}

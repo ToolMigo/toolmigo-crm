@@ -1,0 +1,5 @@
+from django.db import migrations, models
+
+class Migration(migrations.Migration):
+    dependencies=[('core','0015_user_totp_enabled_user_totp_secret_encrypted_and_more')]
+    operations=[migrations.AddField(model_name='organization',name='default_invoice_notes',field=models.TextField(blank=True)),migrations.AddField(model_name='organization',name='default_quote_terms',field=models.TextField(blank=True)),migrations.AddField(model_name='organization',name='invoice_prefix',field=models.CharField(default='FAC',max_length=10)),migrations.AddField(model_name='organization',name='logo',field=models.ImageField(blank=True,upload_to='organizations/logos/')),migrations.AddField(model_name='organization',name='primary_color',field=models.CharField(default='#239f7f',max_length=7)),migrations.AddField(model_name='organization',name='quote_prefix',field=models.CharField(default='OFF',max_length=10)),migrations.AddField(model_name='organization',name='quote_valid_days',field=models.PositiveSmallIntegerField(default=30))]

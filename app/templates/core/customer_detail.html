@@ -12,7 +12,7 @@
 </div>
 </div>
 <div class="button-row">
-<a class="btn subtle" href="{% url 'customer_edit' customer.id %}">Bewerken</a>
+<a class="btn subtle" href="{% url 'customer_edit' customer.id %}">Bewerken</a>{% if active_membership.role == 'owner' or active_membership.role == 'customer_manager' %}<a class="btn subtle" href="{% url 'portal_manage' customer.id %}">Klantportaal</a>{% endif %}
 <button class="btn subtle danger-text" onclick="document.getElementById('archive-dialog').showModal()">Archiveren</button>
 </div>
 </div>
@@ -103,10 +103,9 @@
 </dl>{% if customer.labels %}<div class="labels">{% for label in customer.labels %}<i>{{ label }}</i>{% endfor %}</div>{% endif %}</section>{% if customer.notes %}<section class="card side-card">
 <span class="eyebrow">INTERNE NOTITIES</span>
 <p>{{ customer.notes|linebreaksbr }}</p>
-</section>{% endif %}<section class="card side-card muted-card">
+</section>{% endif %}<section class="card side-card">
 <span class="eyebrow">DOCUMENTEN</span>
-<h3>Offertes en facturen</h3>
-<p>Deze koppeling wordt in de volgende bouwfase actief.</p>
+<h3>Klantbestanden</h3><form method="post" enctype="multipart/form-data" action="{% url 'customer_document_add' customer.id %}">{% csrf_token %}{% for field in document_form %}{% include 'core/form_field.html' with field=field %}{% endfor %}<button class="btn primary">Toevoegen</button></form>{% for item in documents %}<a class="activity-row" href="{% url 'project_document_download' item.id %}"><i></i><div><b>{{ item.title }}</b><small>{{ item.original_name }}{% if item.visible_to_portal %} · zichtbaar in portaal{% endif %}</small></div></a>{% empty %}<div class="empty">Nog geen bestanden.</div>{% endfor %}
 </section>
 </aside>
 </div>

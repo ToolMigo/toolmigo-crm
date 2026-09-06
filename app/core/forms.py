@@ -1,6 +1,7 @@
 from django import forms
+from decimal import Decimal
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from .models import Appointment, AppointmentType, Board, BoardColumn, Contact, Customer, Invoice, InvoiceLine, Membership, OrganizationEmailSettings, Payment, Product, Quote, QuoteLine, Task, TaskAttachment, User
+from .models import Appointment, AppointmentType, BackupConfiguration, Board, BoardColumn, Contact, Customer, EmailTemplate, Expense, Invoice, InvoiceLine, Membership, MileageEntry, Opportunity, Organization, OrganizationEmailSettings, Payment, Product, Project, ProjectDocument, Quote, QuoteLine, RecurringInvoiceSchedule, ReminderPolicy, Task, TaskAttachment, TimeEntry, User
 
 class LoginForm(AuthenticationForm):
     username=forms.EmailField(label='E-mailadres',widget=forms.EmailInput(attrs={'autofocus':True,'autocomplete':'email','placeholder':'naam@bedrijf.nl'}))
@@ -29,6 +30,20 @@ class OrganizationEmailSettingsForm(forms.ModelForm):
         if password: obj.set_password(password)
         if commit: obj.save()
         return obj
+
+class OrganizationSettingsForm(forms.ModelForm):
+    class Meta:
+        model=Organization; fields=('name','logo','address','postal_code','city','kvk_number','vat_id','iban','payment_term_days','primary_color','quote_prefix','invoice_prefix','quote_valid_days','default_quote_terms','default_invoice_notes')
+        widgets={'primary_color':forms.TextInput(attrs={'type':'color'}),'default_quote_terms':forms.Textarea(attrs={'rows':4}),'default_invoice_notes':forms.Textarea(attrs={'rows':4})}
+        labels={'name':'Bedrijfsnaam','logo':'Bedrijfslogo','kvk_number':'KvK-nummer','vat_id':'Btw-identificatienummer','payment_term_days':'Standaard betalingstermijn','primary_color':'Huisstijlkleur','quote_prefix':'Offertevoorvoegsel','invoice_prefix':'Factuurvoorvoegsel','quote_valid_days':'Standaard geldigheid offerte','default_quote_terms':'Standaard offertevoorwaarden','default_invoice_notes':'Standaard factuurtekst'}
+    def clean_primary_color(self):
+        value=self.cleaned_data['primary_color'].lower()
+        if len(value)!=7 or value[0]!='#' or any(c not in '0123456789abcdef' for c in value[1:]): raise forms.ValidationError('Kies een geldige hexkleur.')
+        return value
+    def clean_logo(self):
+        logo=self.cleaned_data.get('logo')
+        if logo and getattr(logo,'size',0)>5*1024*1024: raise forms.ValidationError('Het logo is groter dan 5 MB.')
+        return logo
 
 class TeamMemberForm(UserCreationForm):
     role=forms.ChoiceField(label='Rol',choices=Membership.Role.choices)
@@ -212,6 +227,17 @@ class TaskCommentForm(forms.Form):
 class ChecklistItemForm(forms.Form):
     text=forms.CharField(label='Checklistitem',max_length=240)
 
+class BackupConfigurationForm(forms.ModelForm):
+    weekday=forms.ChoiceField(label='Dag van de week',choices=((0,'Maandag'),(1,'Dinsdag'),(2,'Woensdag'),(3,'Donderdag'),(4,'Vrijdag'),(5,'Zaterdag'),(6,'Zondag')))
+    class Meta:
+        model=BackupConfiguration; fields=('max_backups','automatic_enabled','frequency','weekday','run_at')
+        widgets={'run_at':forms.TimeInput(attrs={'type':'time'})}
+        labels={'max_backups':'Maximaal aantal back-ups','automatic_enabled':'Automatische back-ups inschakelen','frequency':'Frequentie','run_at':'Tijdstip'}
+    def clean_max_backups(self):
+        value=self.cleaned_data['max_backups']
+        if not 1<=value<=365: raise forms.ValidationError('Kies een aantal tussen 1 en 365.')
+        return value
+
 class TaskAttachmentForm(forms.ModelForm):
     class Meta: model=TaskAttachment; fields=('file',)
     def clean_file(self):
@@ -219,3 +245,80 @@ class TaskAttachmentForm(forms.ModelForm):
         if uploaded.size>10*1024*1024: raise forms.ValidationError('Het bestand is groter dan 10 MB.')
         if extension in {'exe','com','bat','cmd','sh','ps1','php','js','jar','msi','scr'}: raise forms.ValidationError('Dit bestandstype is niet toegestaan.')
         return uploaded
+
+class OpportunityForm(forms.ModelForm):
+    class Meta: model=Opportunity; fields=('customer','title','stage','expected_revenue','probability','follow_up_date','owner','notes'); widgets={'follow_up_date':forms.DateInput(attrs={'type':'date'}),'notes':forms.Textarea(attrs={'rows':4})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,**kwargs); self.organization=organization; self.fields['customer'].queryset=organization.customers.exclude(status=Customer.Status.ARCHIVED) if organization else Customer.objects.none(); self.fields['owner'].queryset=organization.memberships.filter(is_active=True,is_removed=False) if organization else Membership.objects.none()
+    def clean_probability(self):
+        value=self.cleaned_data['probability']
+        if value>100: raise forms.ValidationError('Waarschijnlijkheid mag maximaal 100% zijn.')
+        return value
+    def save(self,commit=True):
+        obj=super().save(False); obj.organization=self.organization
+        if commit: obj.save()
+        return obj
+
+class ProjectForm(forms.ModelForm):
+    class Meta: model=Project; fields=('customer','name','status','budget','start_date','end_date','members','notes'); widgets={'start_date':forms.DateInput(attrs={'type':'date'}),'end_date':forms.DateInput(attrs={'type':'date'}),'members':forms.CheckboxSelectMultiple(),'notes':forms.Textarea(attrs={'rows':4})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,**kwargs); self.organization=organization; self.fields['customer'].queryset=organization.customers.exclude(status=Customer.Status.ARCHIVED) if organization else Customer.objects.none(); self.fields['members'].queryset=organization.memberships.filter(is_active=True,is_removed=False) if organization else Membership.objects.none()
+    def clean(self):
+        data=super().clean()
+        if data.get('start_date') and data.get('end_date') and data['end_date']<data['start_date']: self.add_error('end_date','Einddatum ligt vóór de startdatum.')
+        return data
+    def save(self,commit=True):
+        obj=super().save(False); obj.organization=self.organization
+        if commit: obj.save(); self.save_m2m()
+        return obj
+
+class TimeEntryForm(forms.ModelForm):
+    class Meta: model=TimeEntry; fields=('date','hours','hourly_rate','description'); widgets={'date':forms.DateInput(attrs={'type':'date'})}
+    def clean_hours(self):
+        value=self.cleaned_data['hours']
+        if value<=0 or value>24: raise forms.ValidationError('Uren moeten tussen 0 en 24 liggen.')
+        return value
+
+class MileageEntryForm(forms.ModelForm):
+    class Meta: model=MileageEntry; fields=('date','kilometers','rate','description'); widgets={'date':forms.DateInput(attrs={'type':'date'})}
+
+class ExpenseForm(forms.ModelForm):
+    class Meta: model=Expense; fields=('date','amount','description','receipt'); widgets={'date':forms.DateInput(attrs={'type':'date'})}
+    def clean_receipt(self):
+        value=self.cleaned_data.get('receipt')
+        if value and value.size>10*1024*1024: raise forms.ValidationError('Het bewijsstuk is groter dan 10 MB.')
+        return value
+
+class ProjectDocumentForm(forms.ModelForm):
+    class Meta: model=ProjectDocument; fields=('title','file','visible_to_portal'); labels={'visible_to_portal':'Zichtbaar in klantportaal'}
+    def clean_file(self):
+        value=self.cleaned_data['file']
+        if value.size>20*1024*1024: raise forms.ValidationError('Het document is groter dan 20 MB.')
+        return value
+
+class RecurringInvoiceScheduleForm(forms.ModelForm):
+    line_description=forms.CharField(label='Factuurregel',max_length=300)
+    line_quantity=forms.DecimalField(label='Aantal',min_value=Decimal('0.01'),initial=1,max_digits=10,decimal_places=2)
+    line_unit=forms.CharField(label='Eenheid',initial='stuk',max_length=30)
+    line_price=forms.DecimalField(label='Prijs exclusief btw',min_value=0,max_digits=12,decimal_places=2)
+    line_vat=forms.ChoiceField(label='Btw',choices=((0,'0%'),(9,'9%'),(21,'21%')),initial=21)
+    class Meta: model=RecurringInvoiceSchedule; fields=('customer','title','frequency','next_run','payment_term_days','notes','is_active'); widgets={'next_run':forms.DateInput(attrs={'type':'date'}),'notes':forms.Textarea(attrs={'rows':3})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,**kwargs); self.organization=organization; self.fields['customer'].queryset=organization.customers.exclude(status=Customer.Status.ARCHIVED) if organization else Customer.objects.none()
+        if self.instance.pk and self.instance.lines:
+            line=self.instance.lines[0]
+            for field,key in (('line_description','description'),('line_quantity','quantity'),('line_unit','unit'),('line_price','unit_price'),('line_vat','vat_rate')): self.fields[field].initial=line.get(key)
+    def save(self,commit=True):
+        obj=super().save(False); obj.organization=self.organization; obj.lines=[{'description':self.cleaned_data['line_description'],'quantity':str(self.cleaned_data['line_quantity']),'unit':self.cleaned_data['line_unit'],'unit_price':str(self.cleaned_data['line_price']),'vat_rate':int(self.cleaned_data['line_vat'])}]
+        if commit: obj.save()
+        return obj
+
+class ReminderPolicyForm(forms.ModelForm):
+    class Meta: model=ReminderPolicy; fields=('enabled','first_after_days','second_after_days','final_after_days'); labels={'enabled':'Automatisch herinneringen klaarzetten','first_after_days':'Eerste herinnering na dagen','second_after_days':'Tweede herinnering na dagen','final_after_days':'Laatste herinnering na dagen'}
+    def clean(self):
+        data=super().clean(); values=[data.get('first_after_days'),data.get('second_after_days'),data.get('final_after_days')]
+        if all(v is not None for v in values) and values!=sorted(values): raise forms.ValidationError('De herinneringstermijnen moeten oplopend zijn.')
+        return data
+
+class EmailTemplateForm(forms.ModelForm):
+    class Meta: model=EmailTemplate; fields=('subject','body'); widgets={'body':forms.Textarea(attrs={'rows':10})}; labels={'subject':'Onderwerp','body':'Bericht'}

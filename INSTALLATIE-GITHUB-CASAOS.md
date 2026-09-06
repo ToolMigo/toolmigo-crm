@@ -7,7 +7,7 @@ Maak op GitHub een lege repository met de naam `toolmigo-crm`. Upload daarna all
 Na de push naar `main` bouwt GitHub Actions automatisch deze images:
 
 - `ghcr.io/JOUW-GITHUB-NAAM/toolmigo-crm:latest`
-- `ghcr.io/JOUW-GITHUB-NAAM/toolmigo-crm:1.0.0`
+- `ghcr.io/JOUW-GITHUB-NAAM/toolmigo-crm:1.1.0`
 
 Controleer de voortgang via **GitHub → Actions**. Open na voltooiing het package bij je GitHub-profiel en wijzig **Package settings → Change visibility** naar **Public**. CasaOS kan het image dan zonder registry-login ophalen.
 
@@ -15,8 +15,8 @@ Controleer de voortgang via **GitHub → Actions**. Open na voltooiing het packa
 
 Open `docker-compose.casaos.yml` en vervang:
 
-1. Beide databasewachtwoord-velden door exact hetzelfde sterke wachtwoord.
-2. De geheime sleutel door de uitvoer van `openssl rand -base64 64`.
+1. Alle databasewachtwoord-velden door exact hetzelfde sterke wachtwoord.
+2. De geheime sleutel bij zowel `app` als `backup-scheduler` door dezelfde uitvoer van `openssl rand -base64 64`.
 3. Het beheerdersadres en beheerderswachtwoord.
 4. `192.168.178.72` wanneer het IP-adres van CasaOS later verandert.
 
@@ -35,4 +35,4 @@ Installeer de app en open daarna `http://192.168.178.72:8088`.
 
 ## Gegevens bewaren
 
-De database, uploads en Redis-data staan onder `/DATA/AppData/toolmigo-crm`. Maak vooral van de map `postgres` regelmatig een gecontroleerde back-up. Verwijder deze mappen niet bij een herinstallatie.
+De database, uploads, interne back-ups en Redis-data staan onder `/DATA/AppData/toolmigo-crm`. Verwijder deze mappen niet bij een herinstallatie. Download daarnaast regelmatig een back-up vanuit het CRM en bewaar die buiten de CasaOS-server.

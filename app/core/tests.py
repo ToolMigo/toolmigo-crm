@@ -2,11 +2,13 @@ from django.test import Client, TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.mail import get_connection
 from unittest.mock import patch
+import pyotp
 from django.urls import reverse
 from datetime import date, timedelta
 from decimal import Decimal
 from django.utils import timezone
-from .models import Appointment, AppointmentType, AuditEvent, Board, BoardColumn, Contact, Customer, CustomerActivity, EmailDelivery, Invoice, InvoiceLine, Membership, Organization, OrganizationEmailSettings, Payment, Product, Quote, QuoteLine, Task, TaskAttachment, TaskChecklistItem, User
+from .models import Appointment, AppointmentType, AuditEvent, Board, BoardColumn, Contact, Customer, CustomerActivity, EmailDelivery, Invoice, InvoiceLine, Membership, Opportunity, Organization, OrganizationEmailSettings, Payment, PaymentReminder, PortalAccess, PortalDecision, Product, Project, Quote, QuoteLine, RecurringInvoiceSchedule, ReminderPolicy, Task, TaskAttachment, TaskChecklistItem, TimeEntry, User
+from .automation import generate_recurring_drafts, queue_payment_reminders
 
 class TenantSecurityTests(TestCase):
     def setUp(self):
@@ -33,8 +35,29 @@ class TenantSecurityTests(TestCase):
         self.assertRedirects(response,reverse('team')); self.assertTrue(Membership.objects.filter(organization=self.a,user__email='nieuw@example.nl').exists()); self.assertFalse(Membership.objects.filter(organization=self.b,user__email='nieuw@example.nl').exists()); self.assertTrue(AuditEvent.objects.filter(organization=self.a,action='team.member_created').exists())
     def test_successful_login_is_audited(self):
         response=self.client.post(reverse('login'),{'username':'owner@example.nl','password':'CorrectHorseBattery!1'}); self.assertRedirects(response,reverse('dashboard')); self.assertTrue(AuditEvent.objects.filter(actor=self.owner,action='auth.login').exists())
+    def test_two_factor_cannot_be_bypassed_after_password(self):
+        secret=pyotp.random_base32(); self.owner.set_totp_secret(secret); self.owner.totp_enabled=True; self.owner.save()
+        response=self.client.post(reverse('login'),{'username':'owner@example.nl','password':'CorrectHorseBattery!1'})
+        self.assertRedirects(response,reverse('two_factor_login')); self.assertNotIn('_auth_user_id',self.client.session)
+        self.assertEqual(self.client.post(reverse('two_factor_login'),{'code':'000000'}).status_code,200); self.assertNotIn('_auth_user_id',self.client.session)
+        self.assertRedirects(self.client.post(reverse('two_factor_login'),{'code':pyotp.TOTP(secret).now()}),reverse('dashboard')); self.assertIn('_auth_user_id',self.client.session)
+    def test_owner_can_reset_team_member_two_factor(self):
+        secret=pyotp.random_base32(); self.worker.set_totp_secret(secret); self.worker.totp_enabled=True; self.worker.recovery_code_hashes=['hash']; self.worker.save()
+        self.client.force_login(self.owner); membership=self.worker.memberships.get(organization=self.a); self.assertRedirects(self.client.post(reverse('team_reset_two_factor',args=[membership.id])),reverse('team'))
+        self.worker.refresh_from_db(); self.assertFalse(self.worker.totp_enabled); self.assertEqual(self.worker.recovery_code_hashes,[]); self.assertTrue(AuditEvent.objects.filter(action='auth.2fa_admin_reset').exists())
     def test_only_owner_can_open_email_settings(self):
         self.client.force_login(self.worker); self.assertRedirects(self.client.get(reverse('email_settings')),reverse('dashboard')); self.client.force_login(self.owner); self.assertEqual(self.client.get(reverse('email_settings')).status_code,200)
+    def test_only_owner_can_change_organization_settings(self):
+        self.client.force_login(self.worker); self.assertRedirects(self.client.get(reverse('organization_settings')),reverse('dashboard'))
+        self.client.force_login(self.owner); response=self.client.post(reverse('organization_settings'),{'name':'Nieuwe Bedrijfsnaam','address':'Straat 1','postal_code':'1234 AB','city':'Utrecht','kvk_number':'12345678','vat_id':'NL001','iban':'NL91ABNA0417164300','payment_term_days':14,'primary_color':'#123abc','quote_prefix':'OFF','invoice_prefix':'FAC','quote_valid_days':30,'default_quote_terms':'Voorwaarden','default_invoice_notes':'Bedankt'})
+        self.assertRedirects(response,reverse('organization_settings')); self.a.refresh_from_db(); self.assertEqual(self.a.name,'Nieuwe Bedrijfsnaam')
+    def test_global_search_is_tenant_scoped(self):
+        Customer.objects.create(organization=self.a,legal_name='Vindbare Eigen Klant'); Customer.objects.create(organization=self.b,legal_name='Vindbare Vreemde Klant')
+        self.client.force_login(self.owner); response=self.client.get(reverse('global_search'),{'q':'Vindbare'}); self.assertContains(response,'Eigen Klant'); self.assertNotContains(response,'Vreemde Klant')
+    def test_trash_is_owner_only_and_customer_can_be_restored(self):
+        customer=Customer.objects.create(organization=self.a,legal_name='Herstelbare Klant',status=Customer.Status.ARCHIVED,archived_at=timezone.now(),archived_by=self.owner)
+        self.client.force_login(self.worker); self.assertRedirects(self.client.get(reverse('trash')),reverse('dashboard'))
+        self.client.force_login(self.owner); self.assertContains(self.client.get(reverse('trash')),'Herstelbare Klant'); self.assertRedirects(self.client.post(reverse('trash_restore',args=['customer',customer.id])),reverse('trash')); customer.refresh_from_db(); self.assertEqual(customer.status,Customer.Status.ACTIVE); self.assertIsNone(customer.archived_at)
     def test_owner_saves_encrypted_smtp_password(self):
         self.client.force_login(self.owner); response=self.client.post(reverse('email_settings'),{'host':'smtp.example.nl','port':'587','username':'mailer','password':'SuperSecretSMTP!','from_email':'facturen@example.nl','use_tls':'on','is_active':'on'}); self.assertRedirects(response,reverse('email_settings')); config=OrganizationEmailSettings.objects.get(organization=self.a); self.assertNotIn('SuperSecretSMTP!',config.password_encrypted); self.assertEqual(config.get_password(),'SuperSecretSMTP!')
     def test_all_account_roles_are_available(self):
@@ -66,6 +89,42 @@ class TenantSecurityTests(TestCase):
         self.assertContains(owner_response,'AUDITLOG'); self.assertContains(owner_response,'geheime.auditactie'); self.assertNotContains(owner_response,'VOORTGANG')
         self.client.force_login(self.worker); worker_response=self.client.get(reverse('dashboard'))
         self.assertNotContains(worker_response,'AUDITLOG'); self.assertNotContains(worker_response,'geheime.auditactie'); self.assertNotContains(worker_response,'VOORTGANG')
+
+class SalesProjectSecurityTests(TestCase):
+    def setUp(self):
+        self.a=Organization.objects.create(name='Uitvoering A',slug='uitvoering-a'); self.b=Organization.objects.create(name='Uitvoering B',slug='uitvoering-b'); self.user=User.objects.create_user(email='project@example.nl',display_name='Projectbeheer',password='CorrectHorseBattery!1'); self.member=Membership.objects.create(organization=self.a,user=self.user,role=Membership.Role.PROJECT_MANAGER); self.customer=Customer.objects.create(organization=self.a,legal_name='Projectklant'); self.foreign_customer=Customer.objects.create(organization=self.b,legal_name='Vreemde klant'); self.project=Project.objects.create(organization=self.a,customer=self.customer,name='Eigen project'); self.foreign_project=Project.objects.create(organization=self.b,customer=self.foreign_customer,name='Vreemd project'); self.client.force_login(self.user)
+    def test_project_detail_is_tenant_scoped(self): self.assertEqual(self.client.get(reverse('project_detail',args=[self.foreign_project.id])).status_code,404)
+    def test_project_manager_can_create_project_for_own_customer(self):
+        response=self.client.post(reverse('project_create'),{'customer':self.customer.id,'name':'Nieuw project','status':'active','budget':'1000','members':[self.member.id]}); project=Project.objects.get(name='Nieuw project'); self.assertEqual(project.organization,self.a); self.assertRedirects(response,reverse('project_detail',args=[project.id]))
+    def test_time_entry_inherits_tenant_and_requires_own_submit(self):
+        self.client.post(reverse('time_entry_add',args=[self.project.id]),{'date':'2026-09-06','hours':'2.50','hourly_rate':'80','description':'Werk'}); entry=TimeEntry.objects.get(project=self.project); self.assertEqual(entry.organization,self.a); self.assertEqual(entry.member,self.member); self.assertRedirects(self.client.post(reverse('time_entry_submit',args=[entry.id])),reverse('project_detail',args=[self.project.id])); entry.refresh_from_db(); self.assertEqual(entry.status,TimeEntry.Status.SUBMITTED)
+    def test_project_manager_cannot_create_sales_opportunity(self):
+        response=self.client.post(reverse('opportunity_create'),{'customer':self.customer.id,'title':'Niet toegestaan','stage':'lead','expected_revenue':'100','probability':'10'}); self.assertRedirects(response,reverse('dashboard')); self.assertFalse(Opportunity.objects.exists())
+
+class FinancialAutomationTests(TestCase):
+    def setUp(self):
+        self.org=Organization.objects.create(name='Financieel',slug='financieel'); self.user=User.objects.create_user(email='finance-test@example.nl',display_name='Finance',password='CorrectHorseBattery!1'); Membership.objects.create(organization=self.org,user=self.user,role=Membership.Role.OWNER); self.customer=Customer.objects.create(organization=self.org,legal_name='Abonnement BV',email='debiteur@example.nl')
+    def test_recurring_schedule_generates_one_draft_and_advances(self):
+        schedule=RecurringInvoiceSchedule.objects.create(organization=self.org,customer=self.customer,title='Abonnement',frequency='monthly',next_run=date.today(),payment_term_days=14,lines=[{'description':'Dienst','quantity':'1','unit':'maand','unit_price':'100','vat_rate':21}],created_by=self.user)
+        self.assertEqual(len(generate_recurring_drafts(date.today())),1); self.assertEqual(len(generate_recurring_drafts(date.today())),0); schedule.refresh_from_db(); self.assertGreater(schedule.next_run,date.today()); self.assertEqual(Invoice.objects.get().status,Invoice.Status.DRAFT)
+    def test_reminder_is_queued_once_at_matching_level(self):
+        ReminderPolicy.objects.create(organization=self.org,enabled=True,first_after_days=1,second_after_days=7,final_after_days=14); invoice=Invoice.objects.create(organization=self.org,customer=self.customer,created_by=self.user,number='FAC-1',status=Invoice.Status.SENT,title='Test',issue_date=date.today()-timedelta(days=20),delivery_date=date.today()-timedelta(days=20),due_date=date.today()-timedelta(days=15)); InvoiceLine.objects.create(organization=self.org,invoice=invoice,description='Werk',quantity=1,unit_price=100,vat_rate=21)
+        self.assertEqual(len(queue_payment_reminders(date.today())),1); self.assertEqual(len(queue_payment_reminders(date.today())),0); self.assertEqual(PaymentReminder.objects.get().level,3)
+    def test_bookkeeping_export_is_zip_and_tenant_scoped(self):
+        other=Organization.objects.create(name='Ander',slug='ander-fin'); other_customer=Customer.objects.create(organization=other,legal_name='Geheim'); other_user=User.objects.create_user(email='other-fin@example.nl',display_name='Ander',password='CorrectHorseBattery!1'); invoice=Invoice.objects.create(organization=other,customer=other_customer,created_by=other_user,number='GEHEIM-1',status=Invoice.Status.SENT,title='Geheim',issue_date=date.today(),delivery_date=date.today(),due_date=date.today()); InvoiceLine.objects.create(organization=other,invoice=invoice,description='Geheim',quantity=1,unit_price=99)
+        self.client.force_login(self.user); response=self.client.get(reverse('bookkeeping_export'),{'start':date.today().isoformat(),'end':date.today().isoformat()}); self.assertEqual(response.status_code,200); self.assertEqual(response['Content-Type'],'application/zip'); self.assertNotIn(b'GEHEIM-1',response.content)
+
+class PortalSecurityTests(TestCase):
+    def setUp(self):
+        self.org=Organization.objects.create(name='Portaalbedrijf',slug='portaalbedrijf'); self.user=User.objects.create_user(email='portal-owner@example.nl',display_name='Owner',password='CorrectHorseBattery!1'); Membership.objects.create(organization=self.org,user=self.user,role=Membership.Role.OWNER); self.customer=Customer.objects.create(organization=self.org,legal_name='Portaalklant',email='klant@example.nl'); self.contact=Contact.objects.create(organization=self.org,customer=self.customer,first_name='Klant'); self.quote=Quote.objects.create(organization=self.org,customer=self.customer,created_by=self.user,number='OFF-1',status=Quote.Status.SENT,title='Voorstel',issue_date=date.today(),valid_until=date.today()+timedelta(days=30)); QuoteLine.objects.create(organization=self.org,quote=self.quote,description='Werk',quantity=1,unit_price=100)
+    def test_valid_token_opens_only_linked_customer_and_records_decision(self):
+        import hashlib
+        token='veilig-test-token'; access=PortalAccess.objects.create(organization=self.org,customer=self.customer,contact=self.contact,token_digest=hashlib.sha256(token.encode()).hexdigest(),token_hint='st-token',expires_at=timezone.now()+timedelta(days=1),created_by=self.user)
+        self.assertRedirects(self.client.get(reverse('portal_token',args=[token])),reverse('portal_home')); response=self.client.get(reverse('portal_home')); self.assertContains(response,'OFF-1'); self.assertNotContains(response,'interne notities')
+        self.assertRedirects(self.client.post(reverse('portal_quote_decide',args=[self.quote.id]),{'decision':'accepted','signer_name':'Klant Naam'}),reverse('portal_home')); self.quote.refresh_from_db(); decision=PortalDecision.objects.get(quote=self.quote); self.assertEqual(self.quote.status,Quote.Status.ACCEPTED); self.assertEqual(len(decision.document_sha256),64); self.assertEqual(decision.portal_access,access)
+    def test_expired_or_revoked_token_is_rejected(self):
+        import hashlib
+        token='verlopen'; PortalAccess.objects.create(organization=self.org,customer=self.customer,contact=self.contact,token_digest=hashlib.sha256(token.encode()).hexdigest(),token_hint='verlopen',expires_at=timezone.now()-timedelta(seconds=1),created_by=self.user); self.assertEqual(self.client.get(reverse('portal_token',args=[token])).status_code,403)
 
 class CustomerSecurityTests(TestCase):
     def setUp(self):
@@ -106,7 +165,7 @@ class QuoteWorkflowTests(TestCase):
     def test_maker_cannot_approve_own_quote(self):
         self.quote.status=Quote.Status.SUBMITTED; self.quote.save(); self.client.force_login(self.maker); self.client.post(reverse('quote_approve',args=[self.quote.id])); self.quote.refresh_from_db(); self.assertEqual(self.quote.status,Quote.Status.SUBMITTED); self.assertEqual(self.quote.number,'')
     def test_approver_assigns_expected_number(self):
-        self.quote.status=Quote.Status.SUBMITTED; self.quote.save(); self.client.force_login(self.approver); self.client.post(reverse('quote_approve',args=[self.quote.id])); self.quote.refresh_from_db(); self.assertEqual(self.quote.status,Quote.Status.APPROVED); self.assertRegex(self.quote.number,r'^TM-\d{4}-0001$'); self.assertTrue(AuditEvent.objects.filter(action='quote.approved',target_id=str(self.quote.id)).exists())
+        self.quote.status=Quote.Status.SUBMITTED; self.quote.save(); self.client.force_login(self.approver); self.client.post(reverse('quote_approve',args=[self.quote.id])); self.quote.refresh_from_db(); self.assertEqual(self.quote.status,Quote.Status.APPROVED); self.assertRegex(self.quote.number,r'^OFF-\d{4}-0001$'); self.assertTrue(AuditEvent.objects.filter(action='quote.approved',target_id=str(self.quote.id)).exists())
     def test_foreign_quote_is_hidden(self):
         foreign_customer=Customer.objects.create(organization=self.other,legal_name='Verborgen'); foreign=Quote.objects.create(organization=self.other,customer=foreign_customer,created_by=self.maker,issue_date=date.today(),valid_until=date.today())
         self.client.force_login(self.maker); self.assertEqual(self.client.get(reverse('quote_detail',args=[foreign.id])).status_code,404)
@@ -130,7 +189,7 @@ class InvoiceWorkflowTests(TestCase):
     def approve(self):
         self.invoice.status=Invoice.Status.SUBMITTED; self.invoice.save(); self.client.force_login(self.approver); self.client.post(reverse('invoice_approve',args=[self.invoice.id])); self.invoice.refresh_from_db()
     def test_approval_assigns_invoice_sequence_and_snapshot(self):
-        self.approve(); self.assertEqual(self.invoice.number,f'TM-{date.today().year}-0001'); self.assertEqual(self.invoice.customer_name_snapshot,'Klant Factuur B.V.'); self.assertEqual(self.invoice.status,Invoice.Status.APPROVED)
+        self.approve(); self.assertEqual(self.invoice.number,f'FAC-{date.today().year}-0001'); self.assertEqual(self.invoice.customer_name_snapshot,'Klant Factuur B.V.'); self.assertEqual(self.invoice.status,Invoice.Status.APPROVED)
     def test_maker_cannot_approve_own_invoice(self):
         self.invoice.status=Invoice.Status.SUBMITTED; self.invoice.save(); self.client.force_login(self.maker); self.client.post(reverse('invoice_approve',args=[self.invoice.id])); self.invoice.refresh_from_db(); self.assertEqual(self.invoice.status,Invoice.Status.SUBMITTED); self.assertEqual(self.invoice.number,'')
     def test_invoice_pdf(self):

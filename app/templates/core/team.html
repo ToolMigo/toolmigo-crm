@@ -15,6 +15,7 @@
     <td><div class="button-row team-actions">
       <a class="btn subtle" href="{% url 'team_edit' member.id %}">Bewerken</a>
       <form method="post" action="{% url 'team_toggle' member.id %}">{% csrf_token %}<button class="btn subtle" {% if member.user_id == user.id %}disabled title="Eigen account"{% endif %}>{% if member.is_active %}Uitschakelen{% else %}Activeren{% endif %}</button></form>
+      {% if member.user.totp_enabled %}<form method="post" action="{% url 'team_reset_two_factor' member.id %}" onsubmit="return confirm('Tweestapsverificatie voor {{ member.user.display_name|escapejs }} resetten?')">{% csrf_token %}<button class="btn subtle" {% if member.user_id == user.id %}disabled title="Via persoonlijke instellingen"{% endif %}>2FA resetten</button></form>{% endif %}
       <form method="post" action="{% url 'team_remove' member.id %}" onsubmit="return confirm('{{ member.user.display_name|escapejs }} verwijderen? De toegang wordt direct ingetrokken; de administratiehistorie blijft bewaard.')">{% csrf_token %}<button class="btn subtle danger-text" {% if member.user_id == user.id %}disabled title="Eigen account"{% endif %}>Verwijderen</button></form>
     </div></td>
   </tr>{% empty %}<tr><td colspan="5">Er zijn nog geen teamleden.</td></tr>{% endfor %}</tbody>

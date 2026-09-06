@@ -47,6 +47,24 @@ Activeer `HTTPS_ENABLED` pas wanneer HTTPS werkelijk correct werkt; HSTS wordt d
 
 Gebruik nooit `docker compose down -v` op een productie-installatie: daarmee worden de databasevolumes verwijderd.
 
+## Back-up en herstel
+
+Maak lokaal een controleerbare back-up van PostgreSQL en alle uploads:
+
+```bash
+./scripts/backup.sh
+```
+
+Standaard worden back-ups onder `backups/` geplaatst en na 30 dagen verwijderd. Gebruik voor een andere locatie of bewaartermijn bijvoorbeeld `BACKUP_ROOT=/veilig/pad BACKUP_RETENTION_DAYS=90 ./scripts/backup.sh`.
+
+Herstel uitsluitend tijdens gepland onderhoud:
+
+```bash
+./scripts/restore.sh /volledig/pad/naar/back-upmap
+```
+
+Het herstelscript controleert eerst checksums en maakt automatisch een veiligheidsback-up van de huidige toestand.
+
 ## E-mail instellen
 
 Een bedrijfsbeheerder kan via **Beheer → E-mailinstellingen** per organisatie de SMTP-server, poort, gebruikersnaam, het wachtwoord, afzenderadres en TLS/SSL invoeren. Sla de instellingen op en verstuur daarna eerst een testmail. Het SMTP-wachtwoord wordt versleuteld opgeslagen. Bewaar daarom dezelfde `SECRET_KEY`; na wijziging daarvan moet het SMTP-wachtwoord opnieuw worden ingevoerd.
@@ -61,4 +79,4 @@ De tests controleren login, rollen, organisatie-isolatie, klantdossiers, btw- en
 
 ## Huidige reikwijdte
 
-Gereed: fundament, klanten, contactpersonen, dossieractiviteiten, productcatalogus, offertes, facturen, betalingen, creditfacturen, document-PDF's, gezamenlijke verzendwachtrij, teamagenda, Kanban-borden, taken, checklists, opmerkingen, beschermde bijlagen, CSV-import/export en Light/Dark mode. De volgende fase maakt de installatie productieklaar.
+Lokaal beschikbaar: fundament, rollen en auditlog, 2FA, bedrijfsprofiel, klanten en contactpersonen, verkoopkansen, offertes, facturen, betalingen, creditfacturen, terugkerende conceptfacturen, betalingsherinneringen, boekhoudexport, teamagenda, Kanban, projecten, uren, kilometers, onkosten, beschermde documenten, klantportaal, rapportages, zoekfunctie, prullenbak, back-upplanning en beheerst herstel. Zie `LOKALE-ACCEPTATIE.md` voordat een versie wordt gepubliceerd.

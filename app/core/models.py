@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 class UserManager(BaseUserManager):
     use_in_migrations=True
@@ -24,9 +25,18 @@ class User(AbstractUser):
     must_change_password = models.BooleanField(default=False)
     avatar = models.ImageField(upload_to='profiles/avatars/',blank=True)
     theme_preference = models.CharField(max_length=10,choices=Theme.choices,default=Theme.SYSTEM)
+    totp_secret_encrypted = models.TextField(blank=True)
+    totp_enabled = models.BooleanField(default=False)
+    recovery_code_hashes = models.JSONField(default=list,blank=True)
     objects=UserManager()
     USERNAME_FIELD='email'; REQUIRED_FIELDS=['display_name']
     def __str__(self): return self.display_name or self.email
+    def set_totp_secret(self,value):
+        from .encryption import encrypt_secret
+        self.totp_secret_encrypted=encrypt_secret(value) if value else ''
+    def get_totp_secret(self):
+        from .encryption import decrypt_secret
+        return decrypt_secret(self.totp_secret_encrypted) if self.totp_secret_encrypted else ''
 
 class Organization(models.Model):
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
@@ -39,6 +49,13 @@ class Organization(models.Model):
     postal_code=models.CharField(max_length=12,blank=True)
     city=models.CharField(max_length=100,blank=True)
     payment_term_days=models.PositiveSmallIntegerField(default=14)
+    logo=models.ImageField(upload_to='organizations/logos/',blank=True)
+    primary_color=models.CharField(max_length=7,default='#239f7f')
+    quote_prefix=models.CharField(max_length=10,default='OFF')
+    invoice_prefix=models.CharField(max_length=10,default='FAC')
+    quote_valid_days=models.PositiveSmallIntegerField(default=30)
+    default_quote_terms=models.TextField(blank=True)
+    default_invoice_notes=models.TextField(blank=True)
     is_active=models.BooleanField(default=True)
     created_at=models.DateTimeField(auto_now_add=True)
     def __str__(self): return self.name
@@ -120,6 +137,8 @@ class Customer(models.Model):
     labels=models.JSONField(default=list,blank=True)
     owner=models.ForeignKey(Membership,on_delete=models.SET_NULL,null=True,blank=True,related_name='owned_customers')
     notes=models.TextField('interne notities',blank=True)
+    archived_at=models.DateTimeField(null=True,blank=True)
+    archived_by=models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='archived_customers')
     created_at=models.DateTimeField(auto_now_add=True); updated_at=models.DateTimeField(auto_now=True)
     class Meta:
         ordering=['legal_name']; indexes=[models.Index(fields=['organization','status']),models.Index(fields=['organization','legal_name'])]
@@ -311,3 +330,82 @@ def task_upload_path(instance,filename): return f'organizations/{instance.task.o
 class TaskAttachment(models.Model):
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='task_attachments'); task=models.ForeignKey(Task,on_delete=models.CASCADE,related_name='attachments'); uploaded_by=models.ForeignKey(User,on_delete=models.PROTECT); file=models.FileField(upload_to=task_upload_path); original_name=models.CharField(max_length=255); content_type=models.CharField(max_length=120,blank=True); size=models.PositiveIntegerField(default=0); created_at=models.DateTimeField(auto_now_add=True)
     def save(self,*args,**kwargs): self.organization_id=self.task.organization_id; super().save(*args,**kwargs)
+
+class BackupConfiguration(models.Model):
+    class Frequency(models.TextChoices): DAILY='daily','Dagelijks'; WEEKLY='weekly','Wekelijks'
+    max_backups=models.PositiveSmallIntegerField(default=10)
+    automatic_enabled=models.BooleanField(default=False)
+    frequency=models.CharField(max_length=10,choices=Frequency.choices,default=Frequency.DAILY)
+    weekday=models.PositiveSmallIntegerField(default=0)
+    run_at=models.TimeField(default='02:00')
+    last_run_date=models.DateField(null=True,blank=True)
+    updated_at=models.DateTimeField(auto_now=True)
+    @classmethod
+    def load(cls): return cls.objects.get_or_create(pk=1)[0]
+
+class Opportunity(models.Model):
+    class Stage(models.TextChoices): LEAD='lead','Lead'; QUALIFIED='qualified','Gekwalificeerd'; PROPOSAL='proposal','Voorstel'; NEGOTIATION='negotiation','Onderhandeling'; WON='won','Gewonnen'; LOST='lost','Verloren'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='opportunities'); customer=models.ForeignKey(Customer,on_delete=models.SET_NULL,null=True,blank=True,related_name='opportunities'); title=models.CharField(max_length=200); stage=models.CharField(max_length=20,choices=Stage.choices,default=Stage.LEAD,db_index=True); expected_revenue=models.DecimalField(max_digits=12,decimal_places=2,default=0); probability=models.PositiveSmallIntegerField(default=10); follow_up_date=models.DateField(null=True,blank=True,db_index=True); owner=models.ForeignKey(Membership,on_delete=models.SET_NULL,null=True,blank=True,related_name='opportunities'); notes=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True); updated_at=models.DateTimeField(auto_now=True)
+    class Meta: ordering=['follow_up_date','-created_at']; indexes=[models.Index(fields=['organization','stage'])]
+    def __str__(self): return self.title
+
+class Project(models.Model):
+    class Status(models.TextChoices): PLANNED='planned','Gepland'; ACTIVE='active','Actief'; ON_HOLD='on_hold','Gepauzeerd'; COMPLETED='completed','Afgerond'; CANCELLED='cancelled','Geannuleerd'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='projects'); customer=models.ForeignKey(Customer,on_delete=models.PROTECT,related_name='projects'); name=models.CharField(max_length=200); status=models.CharField(max_length=20,choices=Status.choices,default=Status.PLANNED,db_index=True); budget=models.DecimalField(max_digits=12,decimal_places=2,default=0); start_date=models.DateField(null=True,blank=True); end_date=models.DateField(null=True,blank=True); members=models.ManyToManyField(Membership,blank=True,related_name='projects'); notes=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True); updated_at=models.DateTimeField(auto_now=True)
+    class Meta: ordering=['-created_at']; indexes=[models.Index(fields=['organization','status'])]
+    def __str__(self): return self.name
+
+class TimeEntry(models.Model):
+    class Status(models.TextChoices): DRAFT='draft','Concept'; SUBMITTED='submitted','Ingediend'; APPROVED='approved','Goedgekeurd'; INVOICED='invoiced','Gefactureerd'; REJECTED='rejected','Afgewezen'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='time_entries'); project=models.ForeignKey(Project,on_delete=models.CASCADE,related_name='time_entries'); member=models.ForeignKey(Membership,on_delete=models.PROTECT,related_name='time_entries'); date=models.DateField(); hours=models.DecimalField(max_digits=6,decimal_places=2); hourly_rate=models.DecimalField(max_digits=10,decimal_places=2,default=0); description=models.CharField(max_length=300); status=models.CharField(max_length=12,choices=Status.choices,default=Status.DRAFT,db_index=True); approved_by=models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='approved_time_entries'); invoice=models.ForeignKey(Invoice,on_delete=models.PROTECT,null=True,blank=True,related_name='time_entries'); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['-date','-created_at']; indexes=[models.Index(fields=['organization','status'])]
+    def save(self,*args,**kwargs): self.organization_id=self.project.organization_id; super().save(*args,**kwargs)
+    @property
+    def amount(self): return money(self.hours*self.hourly_rate)
+
+class MileageEntry(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='mileage_entries'); project=models.ForeignKey(Project,on_delete=models.CASCADE,related_name='mileage_entries'); member=models.ForeignKey(Membership,on_delete=models.PROTECT,related_name='mileage_entries'); date=models.DateField(); kilometers=models.DecimalField(max_digits=8,decimal_places=2); rate=models.DecimalField(max_digits=6,decimal_places=2,default=0.23); description=models.CharField(max_length=300); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['-date'];
+    def save(self,*args,**kwargs): self.organization_id=self.project.organization_id; super().save(*args,**kwargs)
+    @property
+    def amount(self): return money(self.kilometers*self.rate)
+
+def expense_upload_path(instance,filename): return f'organizations/{instance.organization_id}/projects/{instance.project_id}/expenses/{uuid.uuid4().hex}_{filename}'
+class Expense(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='expenses'); project=models.ForeignKey(Project,on_delete=models.CASCADE,related_name='expenses'); member=models.ForeignKey(Membership,on_delete=models.PROTECT,related_name='expenses'); date=models.DateField(); amount=models.DecimalField(max_digits=10,decimal_places=2); description=models.CharField(max_length=300); receipt=models.FileField(upload_to=expense_upload_path,blank=True); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['-date'];
+    def save(self,*args,**kwargs): self.organization_id=self.project.organization_id; super().save(*args,**kwargs)
+
+def project_document_path(instance,filename): return f'organizations/{instance.organization_id}/projects/{instance.project_id or "customer"}/documents/{uuid.uuid4().hex}_{filename}'
+class ProjectDocument(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='documents'); project=models.ForeignKey(Project,on_delete=models.CASCADE,null=True,blank=True,related_name='documents'); customer=models.ForeignKey(Customer,on_delete=models.CASCADE,null=True,blank=True,related_name='documents'); title=models.CharField(max_length=200); file=models.FileField(upload_to=project_document_path); original_name=models.CharField(max_length=255); content_type=models.CharField(max_length=120,blank=True); size=models.PositiveIntegerField(default=0); uploaded_by=models.ForeignKey(User,on_delete=models.PROTECT,related_name='uploaded_documents'); visible_to_portal=models.BooleanField(default=False); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['-created_at']; constraints=[models.CheckConstraint(condition=models.Q(project__isnull=False)|models.Q(customer__isnull=False),name='document_has_parent')]
+
+class RecurringInvoiceSchedule(models.Model):
+    class Frequency(models.TextChoices): MONTHLY='monthly','Maandelijks'; QUARTERLY='quarterly','Per kwartaal'; YEARLY='yearly','Jaarlijks'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='recurring_invoice_schedules'); customer=models.ForeignKey(Customer,on_delete=models.PROTECT,related_name='recurring_invoice_schedules'); title=models.CharField(max_length=200); frequency=models.CharField(max_length=12,choices=Frequency.choices,default=Frequency.MONTHLY); next_run=models.DateField(db_index=True); payment_term_days=models.PositiveSmallIntegerField(default=14); lines=models.JSONField(default=list); notes=models.TextField(blank=True); is_active=models.BooleanField(default=True); last_generated_at=models.DateTimeField(null=True,blank=True); created_by=models.ForeignKey(User,on_delete=models.PROTECT); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['next_run']; indexes=[models.Index(fields=['organization','is_active','next_run'])]
+    def __str__(self): return self.title
+
+class ReminderPolicy(models.Model):
+    organization=models.OneToOneField(Organization,on_delete=models.CASCADE,related_name='reminder_policy'); enabled=models.BooleanField(default=False); first_after_days=models.PositiveSmallIntegerField(default=1); second_after_days=models.PositiveSmallIntegerField(default=7); final_after_days=models.PositiveSmallIntegerField(default=14); updated_at=models.DateTimeField(auto_now=True)
+
+class EmailTemplate(models.Model):
+    class Kind(models.TextChoices): QUOTE='quote','Offerte'; INVOICE='invoice','Factuur'; REMINDER1='reminder1','Eerste herinnering'; REMINDER2='reminder2','Tweede herinnering'; REMINDER_FINAL='reminder_final','Laatste herinnering'
+    organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='email_templates'); kind=models.CharField(max_length=20,choices=Kind.choices); subject=models.CharField(max_length=250); body=models.TextField(); updated_at=models.DateTimeField(auto_now=True)
+    class Meta: constraints=[models.UniqueConstraint(fields=['organization','kind'],name='unique_org_email_template')]
+
+class PaymentReminder(models.Model):
+    class Status(models.TextChoices): QUEUED='queued','In wachtrij'; SENT='sent','Verzonden'; FAILED='failed','Mislukt'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='payment_reminders'); invoice=models.ForeignKey(Invoice,on_delete=models.PROTECT,related_name='reminders'); level=models.PositiveSmallIntegerField(); recipient=models.EmailField(); subject=models.CharField(max_length=250); body=models.TextField(); status=models.CharField(max_length=10,choices=Status.choices,default=Status.QUEUED); error=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True); sent_at=models.DateTimeField(null=True,blank=True)
+    class Meta: ordering=['-created_at']; constraints=[models.UniqueConstraint(fields=['invoice','level'],name='unique_invoice_reminder_level')]
+
+class PortalAccess(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='portal_accesses'); customer=models.ForeignKey(Customer,on_delete=models.CASCADE,related_name='portal_accesses'); contact=models.ForeignKey(Contact,on_delete=models.CASCADE,related_name='portal_accesses'); token_digest=models.CharField(max_length=64,unique=True); token_hint=models.CharField(max_length=12); expires_at=models.DateTimeField(db_index=True); revoked_at=models.DateTimeField(null=True,blank=True); created_by=models.ForeignKey(User,on_delete=models.PROTECT,related_name='created_portal_accesses'); created_at=models.DateTimeField(auto_now_add=True); last_used_at=models.DateTimeField(null=True,blank=True)
+    class Meta: ordering=['-created_at']; indexes=[models.Index(fields=['organization','customer','expires_at'])]
+    @property
+    def is_valid(self): return self.revoked_at is None and self.expires_at>timezone.now()
+
+class PortalDecision(models.Model):
+    class Decision(models.TextChoices): ACCEPTED='accepted','Geaccepteerd'; DECLINED='declined','Afgewezen'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.PROTECT,related_name='portal_decisions'); portal_access=models.ForeignKey(PortalAccess,on_delete=models.PROTECT,related_name='decisions'); quote=models.OneToOneField(Quote,on_delete=models.PROTECT,related_name='portal_decision'); decision=models.CharField(max_length=10,choices=Decision.choices); signer_name=models.CharField(max_length=200); reason=models.TextField(blank=True); document_sha256=models.CharField(max_length=64); ip_address=models.GenericIPAddressField(null=True,blank=True); created_at=models.DateTimeField(auto_now_add=True)

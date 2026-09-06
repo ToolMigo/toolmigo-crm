@@ -36,10 +36,17 @@ services:
       - type: bind
         source: /DATA/AppData/toolmigo-crm/media
         target: /app/media
+      - type: bind
+        source: /DATA/AppData/toolmigo-crm/backups
+        target: /app/backups
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     networks:
       - toolmigo-network
     healthcheck:
@@ -47,6 +54,45 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  backup-scheduler:
+    image: ghcr.io/toolmigo/toolmigo-crm:latest
+    container_name: toolmigo-crm-backup-scheduler
+    restart: unless-stopped
+    command: ["python", "manage.py", "run_backup_scheduler"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      SECRET_KEY: VUL-HIER-DEZELFDE-LANGE-WILLEKEURIGE-SLEUTEL-IN
+      DEBUG: "0"
+      ALLOWED_HOSTS: 192.168.178.72,localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://192.168.178.72:8088
+      COOKIE_SECURE: "0"
+      HTTPS_ENABLED: "0"
+      TZ: Europe/Amsterdam
+      POSTGRES_HOST: toolmigo-crm-db
+      POSTGRES_DB: toolmigo_crm
+      POSTGRES_USER: toolmigo
+      POSTGRES_PASSWORD: VUL-HIER-HETZELFDE-DATABASEWACHTWOORD-IN
+      REDIS_URL: redis://toolmigo-crm-redis:6379/0
+    volumes:
+      - type: bind
+        source: /DATA/AppData/toolmigo-crm/media
+        target: /app/media
+      - type: bind
+        source: /DATA/AppData/toolmigo-crm/backups
+        target: /app/backups
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    networks:
+      - toolmigo-network
 
   db:
     image: postgres:17-alpine

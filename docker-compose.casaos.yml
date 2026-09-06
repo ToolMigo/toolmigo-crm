@@ -73,6 +73,11 @@ services:
       - type: bind
         source: /DATA/AppData/toolmigo-crm/redis
         target: /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 x-casaos:
   id: nl.toolmigo.crm

@@ -1,0 +1,103 @@
+{% extends 'core/base.html' %}{% block title %}Factuur {{ invoice }} · ToolMigo CRM{% endblock %}{% block content %}<div class="breadcrumb">
+<a href="{% url 'invoice_list' %}">Facturen</a>
+<span>›</span>{{ invoice }}</div>
+<div class="page-head">
+<div>
+<span class="eyebrow">{{ invoice.get_kind_display|upper }} · {{ invoice.number|default:'CONCEPT' }}</span>
+<h1>{{ invoice.title }}</h1>
+<p>{{ invoice.customer }} · vervalt {{ invoice.due_date|date:'d-m-Y' }}</p>
+</div>
+<div class="button-row">
+<a class="btn subtle" target="_blank" href="{% url 'invoice_pdf' invoice.id %}">PDF bekijken</a>{% if invoice.status == 'draft' or invoice.status == 'rejected' %}<a class="btn subtle" href="{% url 'invoice_edit' invoice.id %}">Bewerken</a>{% endif %}<form method="post" action="{% url 'invoice_delete' invoice.id %}" onsubmit="return confirm('Deze factuur uit het overzicht verwijderen? De administratiehistorie blijft bewaard.')">{% csrf_token %}<button class="btn subtle danger-text">Verwijderen</button></form><span class="doc-status {{ invoice.status }} large">{{ invoice.get_status_display }}</span>
+</div>
+</div>{% if invoice.rejection_reason %}<div class="message error">
+<b>Afgewezen:</b> {{ invoice.rejection_reason }}</div>{% endif %}<div class="quote-layout">
+<div>
+<section class="card quote-lines">
+<div class="card-head">
+<div>
+<span class="eyebrow">FACTUURREGELS</span>
+<h2>Geleverde producten en diensten</h2>
+</div>
+</div>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Omschrijving</th>
+<th>Aantal</th>
+<th>Prijs</th>
+<th>Korting</th>
+<th>Btw</th>
+<th>Totaal excl.</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>{% for line in invoice.lines.all %}<tr>
+<td>{{ line.description|linebreaksbr }}</td>
+<td>{{ line.quantity }} {{ line.unit }}</td>
+<td>€ {{ line.unit_price }}</td>
+<td>{{ line.discount_percent }}%</td>
+<td>{{ line.vat_rate }}%</td>
+<td>
+<b>€ {{ line.net_amount }}</b>
+</td>
+<td>{% if invoice.status == 'draft' or invoice.status == 'rejected' %}<form method="post" action="{% url 'invoice_line_delete' invoice.id line.id %}">{% csrf_token %}<button class="icon-link danger-text">×</button>
+</form>{% endif %}</td>
+</tr>{% empty %}<tr>
+<td colspan="7">
+<div class="inline-empty">Voeg de eerste factuurregel toe.</div>
+</td>
+</tr>{% endfor %}</tbody>
+</table>
+</div>{% if invoice.status == 'draft' or invoice.status == 'rejected' %}<form class="line-form invoice-line-form" method="post" action="{% url 'invoice_line_add' invoice.id %}">{% csrf_token %}{% for field in line_form %}{% include 'core/form_field.html' with field=field %}{% endfor %}<button class="btn primary">+ Regel</button>
+</form>{% endif %}</section>{% if invoice.payments.all %}<section class="card">
+<span class="eyebrow">BETALINGEN</span>
+<h2>Betalingshistorie</h2>{% for payment in invoice.payments.all %}<div class="payment-row">
+<span>{{ payment.paid_on|date:'d-m-Y' }} · {{ payment.reference|default:'Betaling' }}</span>
+<b>€ {{ payment.amount }}</b>
+</div>{% endfor %}</section>{% endif %}</div>
+<aside>
+<section class="card totals-card">
+<span class="eyebrow">TOTALEN</span>
+<dl>
+<div>
+<dt>Subtotaal</dt>
+<dd>€ {{ invoice.subtotal }}</dd>
+</div>
+<div>
+<dt>Btw</dt>
+<dd>€ {{ invoice.vat_total }}</dd>
+</div>
+<div>
+<dt>Betaald</dt>
+<dd>€ {{ invoice.paid_amount }}</dd>
+</div>
+<div class="grand">
+<dt>Openstaand</dt>
+<dd>€ {{ invoice.outstanding }}</dd>
+</div>
+</dl>
+</section>
+<section class="card side-card">
+<span class="eyebrow">WORKFLOW</span>{% if invoice.status == 'draft' or invoice.status == 'rejected' %}<form method="post" action="{% url 'invoice_submit' invoice.id %}">{% csrf_token %}<button class="btn primary full">Ter goedkeuring indienen</button>
+</form>{% elif invoice.status == 'submitted' %}{% if invoice.created_by_id != user.id and active_membership.role == 'owner' or invoice.created_by_id != user.id and active_membership.role == 'approver' %}<form method="post" action="{% url 'invoice_approve' invoice.id %}">{% csrf_token %}<button class="btn primary full">Factuur goedkeuren</button>
+</form>
+<button class="btn subtle full reject-open" onclick="document.getElementById('reject-dialog').showModal()">Afwijzen</button>{% else %}<p>Wacht op een andere goedkeurder.</p>{% endif %}{% elif invoice.status == 'approved' %}<p>Deze factuur staat klaar in de gezamenlijke verzendwachtrij.</p>
+<a class="btn primary full" href="{% url 'outbox' %}">Naar verzending</a>{% endif %}</section>{% if invoice.status == 'sent' or invoice.status == 'partial' or invoice.status == 'overdue' %}<section class="card side-card">
+<span class="eyebrow">BETALING BOEKEN</span>
+<form method="post" action="{% url 'payment_add' invoice.id %}">{% csrf_token %}{% for field in payment_form %}{% include 'core/form_field.html' with field=field %}{% endfor %}<button class="btn primary full">Betaling registreren</button>
+</form>
+</section>{% endif %}{% if invoice.kind == 'invoice' and invoice.status == 'sent' or invoice.kind == 'invoice' and invoice.status == 'partial' or invoice.kind == 'invoice' and invoice.status == 'paid' or invoice.kind == 'invoice' and invoice.status == 'overdue' %}<section class="card side-card">
+<form method="post" action="{% url 'credit_create' invoice.id %}" onsubmit="return confirm('Volledige creditfactuur aanmaken?')">{% csrf_token %}<button class="btn subtle full">Creditfactuur aanmaken</button>
+</form>
+</section>{% endif %}</aside>
+</div>
+<dialog id="reject-dialog">
+<form method="post" action="{% url 'invoice_reject' invoice.id %}">{% csrf_token %}<h2>Factuur afwijzen</h2>{% for field in rejection_form %}{% include 'core/form_field.html' with field=field %}{% endfor %}<div class="form-actions">
+<button type="button" class="btn subtle" onclick="this.closest('dialog').close()">Annuleren</button>
+<button class="btn danger">Afwijzen</button>
+</div>
+</form>
+</dialog>{% endblock %}

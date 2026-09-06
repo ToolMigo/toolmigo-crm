@@ -1,0 +1,47 @@
+{% extends 'core/base.html' %}{% block title %}Verzending · ToolMigo CRM{% endblock %}{% block content %}<div class="page-head">
+<div>
+<span class="eyebrow">VERZENDCENTRUM</span>
+<h1>Goedgekeurde documenten</h1>
+<p>{{ approved_count }} offertes en facturen staan klaar voor verzending.</p>
+</div>{% if approved_count %}<button class="btn primary" onclick="document.getElementById('send-dialog').showModal()">Alles verzenden</button>{% endif %}</div>
+<section class="card table-card">
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Tijdstip</th>
+<th>Document</th>
+<th>Ontvanger</th>
+<th>Onderwerp</th>
+<th>Status</th>
+<th>Foutmelding</th>
+<th></th>
+</tr>
+</thead>
+<tbody>{% for item in deliveries %}<tr>
+<td>{{ item.created_at|date:'d-m-Y H:i' }}</td>
+<td>{{ item.document_type }} · {{ item.document_id|stringformat:'.8s' }}</td>
+<td>{{ item.recipient }}</td>
+<td>{{ item.subject }}</td>
+<td>
+<span class="doc-status {{ item.status }}">{{ item.get_status_display }}</span>
+</td>
+<td class="error-cell">{{ item.error|default:'—' }}</td>
+<td>{% if active_membership.role == 'owner' or active_membership.role == 'approver' %}<form method="post" action="{% url 'delivery_delete' item.id %}" onsubmit="return confirm('Deze verzendregel uit het overzicht verwijderen?')">{% csrf_token %}<button class="icon-link danger-text">Verwijderen</button></form>{% endif %}</td>
+</tr>{% empty %}<tr>
+<td colspan="7">
+<div class="empty">Nog geen verzendpogingen.</div>
+</td>
+</tr>{% endfor %}</tbody>
+</table>
+</div>
+</section>
+<dialog id="send-dialog">
+<form method="post" action="{% url 'dispatch_approved' %}">{% csrf_token %}<h2>Alles verzenden?</h2>
+<p>Alle {{ approved_count }} goedgekeurde offertes en facturen worden afzonderlijk per e-mail naar hun klant gestuurd.</p>
+<div class="form-actions">
+<button type="button" class="btn subtle" onclick="this.closest('dialog').close()">Annuleren</button>
+<button class="btn primary">Nu verzenden</button>
+</div>
+</form>
+</dialog>{% endblock %}

@@ -1,0 +1,9 @@
+{% extends 'core/base.html' %}
+{% block title %}{% if editing %}Account bewerken{% else %}Teamlid toevoegen{% endif %} · ToolMigo CRM{% endblock %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">{% if editing %}ACCOUNTBEHEER{% else %}NIEUW ACCOUNT{% endif %}</span><h1>{% if editing %}Account bewerken{% else %}Teamlid toevoegen{% endif %}</h1><p>{% if editing %}Pas de accountgegevens of rol van {{ member.user.display_name }} aan.{% else %}Het account krijgt uitsluitend toegang tot {{ active_organization.name }}.{% endif %}</p></div></div>
+<section class="card form-card"><form method="post">{% csrf_token %}
+  {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text|safe }}</small>{% endif %}{% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>{% endfor %}
+  <div class="form-actions"><a class="btn subtle" href="{% url 'team' %}">Annuleren</a><button class="btn primary" type="submit">{% if editing %}Wijzigingen opslaan{% else %}Account aanmaken{% endif %}</button></div>
+</form></section>
+{% endblock %}

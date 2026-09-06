@@ -1,0 +1,59 @@
+{% extends 'core/base.html' %}{% block title %}Facturen · ToolMigo CRM{% endblock %}{% block content %}<div class="page-head">
+<div>
+<span class="eyebrow">FACTURATIE</span>
+<h1>Facturen</h1>
+<p>Verkoopfacturen, betalingen en creditfacturen.</p>
+</div>
+<div class="button-row">
+<a class="btn subtle" href="{% url 'outbox' %}">Klaar voor verzending ({{ approved_count }})</a>
+<a class="btn primary" href="{% url 'invoice_create' %}">+ Nieuwe factuur</a>
+</div>
+</div>
+<section class="card filter-card">
+<form method="get" class="filters quote-filter">
+<select name="status">
+<option value="">Alle statussen</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<button class="btn primary">Filteren</button>
+</form>
+</section>
+<section class="card table-card">
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Nummer</th>
+<th>Klant</th>
+<th>Type</th>
+<th>Datum</th>
+<th>Totaal</th>
+<th>Openstaand</th>
+<th>Status</th>
+<th>
+</th>
+</tr>
+</thead>
+<tbody>{% for invoice in invoices %}<tr>
+<td>
+<b>{{ invoice.number|default:'CONCEPT' }}</b>
+</td>
+<td>{{ invoice.customer }}</td>
+<td>{{ invoice.get_kind_display }}</td>
+<td>{{ invoice.issue_date|date:'d-m-Y' }}</td>
+<td>€ {{ invoice.total }}</td>
+<td>
+<b>€ {{ invoice.outstanding }}</b>
+</td>
+<td>
+<span class="doc-status {{ invoice.status }}">{{ invoice.get_status_display }}</span>
+</td>
+<td>
+<div class="row-actions"><a class="text-link" href="{% url 'invoice_detail' invoice.id %}">Openen →</a><form method="post" action="{% url 'invoice_delete' invoice.id %}" onsubmit="return confirm('Deze factuur uit het overzicht verwijderen? De administratiehistorie blijft bewaard.')">{% csrf_token %}<button class="icon-link danger-text">Verwijderen</button></form></div>
+</td>
+</tr>{% empty %}<tr>
+<td colspan="8">
+<div class="empty">Nog geen facturen.</div>
+</td>
+</tr>{% endfor %}</tbody>
+</table>
+</div>
+</section>{% endblock %}

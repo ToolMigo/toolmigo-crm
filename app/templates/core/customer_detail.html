@@ -1,0 +1,121 @@
+{% extends 'core/base.html' %}{% block title %}{{ customer }} · ToolMigo CRM{% endblock %}{% block content %}<div class="breadcrumb">
+<a href="{% url 'customer_list' %}">Klanten</a>
+<span>›</span>{{ customer }}</div>
+<div class="page-head customer-heading">
+<div class="heading-person">
+{% firstof customer.trade_name customer.legal_name as customer_name %}<span class="big-avatar">{{ customer_name|slice:':1' }}</span>
+<div>
+<span class="eyebrow">{{ customer.get_kind_display }}</span>
+<h1>{{ customer }}</h1>
+<div class="heading-meta">
+<span class="status {{ customer.status }}">{{ customer.get_status_display }}</span>{% if customer.owner %}<span>Eigenaar: {{ customer.owner.user.display_name }}</span>{% endif %}</div>
+</div>
+</div>
+<div class="button-row">
+<a class="btn subtle" href="{% url 'customer_edit' customer.id %}">Bewerken</a>
+<button class="btn subtle danger-text" onclick="document.getElementById('archive-dialog').showModal()">Archiveren</button>
+</div>
+</div>
+<div class="detail-layout">
+<div>
+<section class="card detail-card">
+<div class="card-head">
+<div>
+<span class="eyebrow">CONTACT</span>
+<h2>Contactgegevens</h2>
+</div>
+<a class="text-link" href="{% url 'contact_add' customer.id %}">+ Contactpersoon</a>
+</div>
+<div class="details-grid">
+<div>
+<small>Algemeen e-mailadres</small>
+<a href="mailto:{{ customer.email }}">{{ customer.email|default:'—' }}</a>
+</div>
+<div>
+<small>Telefoonnummer</small>
+<a href="tel:{{ customer.phone }}">{{ customer.phone|default:'—' }}</a>
+</div>
+<div>
+<small>Adres</small>
+<span>{{ customer.address|default:'—' }}{% if customer.city %}<br>{{ customer.postal_code }} {{ customer.city }}{% endif %}</span>
+</div>
+<div>
+<small>Factuuradres</small>
+<span>{% if customer.billing_address %}{{ customer.billing_address }}<br>{{ customer.billing_postal_code }} {{ customer.billing_city }}{% else %}Gelijk aan bezoekadres{% endif %}</span>
+</div>
+</div>
+<div class="contacts">
+<h3>Contactpersonen</h3>{% for contact in contacts %}<div class="contact-row">
+<span class="mini-avatar">{{ contact.first_name|slice:':1' }}</span>
+<div>
+<b>{{ contact }} {% if contact.is_primary %}<i>Primair</i>{% endif %}</b>
+<small>{{ contact.job_title|default:'Contactpersoon' }}</small>
+</div>
+<div>
+<a href="mailto:{{ contact.email }}">{{ contact.email|default:'—' }}</a>
+<small>{{ contact.phone }}</small>
+</div>
+<a class="icon-link" href="{% url 'contact_edit' customer.id contact.id %}">Bewerken</a>
+<form method="post" action="{% url 'contact_archive' customer.id contact.id %}" onsubmit="return confirm('Contactpersoon archiveren?')">{% csrf_token %}<button class="icon-link danger-text">×</button>
+</form>
+</div>{% empty %}<div class="inline-empty">Nog geen contactpersonen toegevoegd.</div>{% endfor %}</div>
+</section>
+<section class="card detail-card">
+<span class="eyebrow">DOSSIER</span>
+<h2>Activiteiten</h2>
+<form class="note-form" method="post" action="{% url 'customer_note' customer.id %}">{% csrf_token %}<div>{{ note_form.kind }}</div>{{ note_form.body }}<button class="btn primary">Toevoegen</button>
+</form>
+<div class="timeline">{% for activity in activities %}<div>
+<i class="type-{{ activity.kind }}">
+</i>
+<section>
+<b>{{ activity.get_kind_display }}</b>
+<p>{{ activity.body|linebreaksbr }}</p>
+<small>{{ activity.actor|default:'Systeem' }} · {{ activity.created_at|date:'d M Y H:i' }}</small>
+</section>
+</div>{% empty %}<div class="inline-empty">Nog geen activiteiten.</div>{% endfor %}</div>
+</section>
+</div>
+<aside>
+<section class="card side-card">
+<span class="eyebrow">BEDRIJFSGEGEVENS</span>
+<dl>
+<div>
+<dt>Juridische naam</dt>
+<dd>{{ customer.legal_name }}</dd>
+</div>
+<div>
+<dt>Handelsnaam</dt>
+<dd>{{ customer.trade_name|default:'—' }}</dd>
+</div>
+<div>
+<dt>KvK-nummer</dt>
+<dd>{{ customer.kvk_number|default:'—' }}</dd>
+</div>
+<div>
+<dt>Btw-id</dt>
+<dd>{{ customer.vat_id|default:'—' }}</dd>
+</div>
+<div>
+<dt>Betalingstermijn</dt>
+<dd>{{ customer.payment_term_days }} dagen</dd>
+</div>
+</dl>{% if customer.labels %}<div class="labels">{% for label in customer.labels %}<i>{{ label }}</i>{% endfor %}</div>{% endif %}</section>{% if customer.notes %}<section class="card side-card">
+<span class="eyebrow">INTERNE NOTITIES</span>
+<p>{{ customer.notes|linebreaksbr }}</p>
+</section>{% endif %}<section class="card side-card muted-card">
+<span class="eyebrow">DOCUMENTEN</span>
+<h3>Offertes en facturen</h3>
+<p>Deze koppeling wordt in de volgende bouwfase actief.</p>
+</section>
+</aside>
+</div>
+<dialog id="archive-dialog">
+<form method="post" action="{% url 'customer_archive' customer.id %}">{% csrf_token %}<h2>Klant archiveren?</h2>
+<p>{{ customer }} verdwijnt uit het actieve overzicht, maar het dossier en de historie blijven bewaard.</p>
+<div class="form-actions">
+<button type="button" class="btn subtle" onclick="this.closest('dialog').close()">Annuleren</button>
+<button class="btn danger">Archiveren</button>
+</div>
+</form>
+</dialog>{% endblock %}

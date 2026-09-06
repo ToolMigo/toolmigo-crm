@@ -1,0 +1,23 @@
+{% extends 'core/base.html' %}
+{% block title %}Team · ToolMigo CRM{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">ORGANISATIEBEHEER</span><h1>Team en rollen</h1><p>Beheer wie toegang heeft tot {{ active_organization.name }}.</p></div>
+  <a class="btn primary" href="{% url 'team_add' %}">+ Teamlid toevoegen</a>
+</div>
+<section class="card table-card"><div class="table-wrap"><table>
+  <thead><tr><th>Gebruiker</th><th>Rol</th><th>Status</th><th>Laatst ingelogd</th><th>Acties</th></tr></thead>
+  <tbody>{% for member in members %}<tr>
+    <td><div class="person"><span>{{ member.user.display_name|slice:':1' }}</span><div><b>{{ member.user.display_name }}</b><small>{{ member.user.email }}</small></div></div></td>
+    <td><span class="role role-{{ member.role }}">{{ member.get_role_display }}</span></td>
+    <td>{% if member.is_active %}<span class="status on">Actief</span>{% else %}<span class="status off">Uitgeschakeld</span>{% endif %}</td>
+    <td>{{ member.user.last_login|date:'d-m-Y H:i'|default:'Nog nooit' }}</td>
+    <td><div class="button-row team-actions">
+      <a class="btn subtle" href="{% url 'team_edit' member.id %}">Bewerken</a>
+      <form method="post" action="{% url 'team_toggle' member.id %}">{% csrf_token %}<button class="btn subtle" {% if member.user_id == user.id %}disabled title="Eigen account"{% endif %}>{% if member.is_active %}Uitschakelen{% else %}Activeren{% endif %}</button></form>
+      <form method="post" action="{% url 'team_remove' member.id %}" onsubmit="return confirm('{{ member.user.display_name|escapejs }} verwijderen? De toegang wordt direct ingetrokken; de administratiehistorie blijft bewaard.')">{% csrf_token %}<button class="btn subtle danger-text" {% if member.user_id == user.id %}disabled title="Eigen account"{% endif %}>Verwijderen</button></form>
+    </div></td>
+  </tr>{% empty %}<tr><td colspan="5">Er zijn nog geen teamleden.</td></tr>{% endfor %}</tbody>
+</table></div></section>
+<div class="info-box"><b>Rollen</b><span><strong>Bedrijfsbeheerder</strong> beheert gebruikers en instellingen. <strong>Facturatie</strong> controleert, keurt goed en verzendt financiële documenten. <strong>Medewerker</strong> is de algemene uitvoerende rol. <strong>Verkoop</strong> richt zich op leads en offertes. <strong>Klantbeheer</strong> onderhoudt klantdossiers en contactpersonen. <strong>Planning</strong> beheert afspraken en capaciteit. <strong>Projectbeheer</strong> coördineert borden, taken en deadlines. <strong>Support</strong> behandelt klantvragen en opvolgtaken.</span></div>
+{% endblock %}

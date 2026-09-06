@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 128" role="img" aria-labelledby="title desc">
+  <title id="title">Toolmigo</title><desc id="desc">Toolmigo merk met mintgroen rond beeldmerk</desc>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#68DDB5"/><stop offset=".45" stop-color="#B8F06B"/><stop offset=".75" stop-color="#FFE585"/><stop offset="1" stop-color="#FFD9C2"/></linearGradient>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#239F7F" flood-opacity=".2"/></filter>
+  </defs>
+  <g transform="translate(12 12)" filter="url(#s)">
+    <circle cx="52" cy="52" r="48" fill="url(#g)"/>
+    <circle cx="52" cy="52" r="41" fill="none" stroke="#fff" stroke-opacity=".82" stroke-width="7"/>
+    <g transform="rotate(-28 52 52)" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round">
+      <path d="M30 43h44M30 59h44"/>
+    </g>
+    <path d="M74 19c10 4 14 13 12 24-10-2-17-9-18-20z" fill="#87D79C"/>
+    <path d="M32 81c8-2 14 1 18 8-8 4-15 2-20-4z" fill="#fff" fill-opacity=".86"/>
+  </g>
+  <text x="128" y="82" font-family="Inter,Arial,sans-serif" font-size="62" font-weight="800" letter-spacing="-3" fill="#2B2F33">Tool<tspan fill="#239F7F">migo</tspan></text>
+</svg>

@@ -1,0 +1,20 @@
+{% extends 'core/base.html' %}
+{% block title %}Dashboard · ToolMigo CRM{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">GOEDEMORGEN</span><h1>Welkom, {{ user.display_name }}.</h1><p>Dit is je veilige ToolMigo-werkruimte.</p></div>
+  <a class="btn primary" href="{% url 'customer_create' %}">+ Nieuwe klant</a>
+</div>
+<div class="stats">
+  <article><span>Actieve klanten</span><b>{{ customer_count }}</b><i class="mint">♙</i></article>
+  <article><span>Teamleden</span><b>{{ team_count }}</b><i class="yellow">♧</i></article>
+  <article><span>Openstaande offertes</span><b>0</b><i class="peach">▤</i></article>
+  <article><span>Te factureren</span><b>€ 0,00</b><i class="lime">€</i></article>
+</div>
+{% if show_auditlog %}
+<section class="card activity" style="margin-top:18px">
+  <div class="card-head"><div><span class="eyebrow">AUDITLOG</span><h2>Recente activiteit</h2></div></div>
+  {% for event in recent_events %}<div class="activity-row"><i></i><div><b>{{ event.action }}</b><small>{{ event.actor|default:'Systeem' }} · {{ event.created_at|date:'d M Y H:i' }}</small></div></div>{% empty %}<div class="empty"><b>Nog geen activiteit</b><span>Belangrijke acties worden hier veilig vastgelegd.</span></div>{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

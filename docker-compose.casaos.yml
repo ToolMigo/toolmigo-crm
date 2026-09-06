@@ -1,0 +1,90 @@
+name: toolmigo-crm
+
+services:
+  app:
+    image: ghcr.io/VUL-HIER-JE-GITHUB-NAAM/toolmigo-crm:latest
+    container_name: toolmigo-crm-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - target: 8000
+        published: "8088"
+        protocol: tcp
+    environment:
+      SECRET_KEY: VUL-HIER-EEN-LANGE-WILLEKEURIGE-SLEUTEL-IN
+      DEBUG: "0"
+      ALLOWED_HOSTS: 192.168.178.72,localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://192.168.178.72:8088
+      COOKIE_SECURE: "0"
+      HTTPS_ENABLED: "0"
+      TZ: Europe/Amsterdam
+      POSTGRES_HOST: db
+      POSTGRES_DB: toolmigo_crm
+      POSTGRES_USER: toolmigo
+      POSTGRES_PASSWORD: VUL-HIER-EEN-STERK-DATABASEWACHTWOORD-IN
+      REDIS_URL: redis://redis:6379/0
+      BOOTSTRAP_ORG_NAME: ToolMigo
+      BOOTSTRAP_ADMIN_NAME: Beheerder
+      BOOTSTRAP_ADMIN_EMAIL: beheerder@example.nl
+      BOOTSTRAP_ADMIN_PASSWORD: VUL-HIER-EEN-STERK-BEHEERDERSWACHTWOORD-IN
+      GUNICORN_WORKERS: "3"
+    volumes:
+      - type: bind
+        source: /DATA/AppData/toolmigo-crm/media
+        target: /app/media
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  db:
+    image: postgres:17-alpine
+    container_name: toolmigo-crm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: toolmigo_crm
+      POSTGRES_USER: toolmigo
+      POSTGRES_PASSWORD: VUL-HIER-HETZELFDE-DATABASEWACHTWOORD-IN
+    volumes:
+      - type: bind
+        source: /DATA/AppData/toolmigo-crm/postgres
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toolmigo -d toolmigo_crm"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    container_name: toolmigo-crm-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - type: bind
+        source: /DATA/AppData/toolmigo-crm/redis
+        target: /data
+
+x-casaos:
+  id: toolmigo-crm
+  main: app
+  index: /
+  port_map: "8088"
+  scheme: http
+  title: ToolMigo CRM
+  icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/crm.png
+  category: Productivity
+  author: ToolMigo
+  developer: ToolMigo
+  architectures:
+    - amd64
+    - arm64

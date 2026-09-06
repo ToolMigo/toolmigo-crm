@@ -1,0 +1,42 @@
+{% extends 'core/base.html' %}{% block title %}Klanten · ToolMigo CRM{% endblock %}{% block content %}<div class="page-head">
+<div>
+<span class="eyebrow">KLANTENBESTAND</span>
+<h1>Klanten</h1>
+<p>{{ page.paginator.count }} resultaten binnen {{ active_organization.name }}.</p>
+</div>
+<div class="button-row">{% if active_membership.role == 'owner' %}<a class="btn subtle" href="{% url 'customer_import' %}">Importeren</a>{% endif %}<a class="btn subtle" href="{% url 'customer_export' %}">Exporteren</a>
+<a class="btn primary" href="{% url 'customer_create' %}">+ Nieuwe klant</a>
+</div>
+</div>
+<section class="card filter-card">
+<form method="get" class="filters">
+<input type="search" name="q" value="{{ query }}" placeholder="Zoek op naam, e-mail, KvK of plaats…">
+<select name="status">
+<option value="all">Alle statussen</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<select name="kind">
+<option value="">Alle typen</option>{% for value,label in kind_choices %}<option value="{{ value }}" {% if selected_kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<button class="btn primary">Zoeken</button>
+</form>
+</section>
+<section class="customer-grid">{% for customer in page %}{% firstof customer.trade_name customer.legal_name as customer_name %}<a class="customer-card" href="{% url 'customer_detail' customer.id %}">
+<div class="customer-top">
+<span class="customer-avatar">{{ customer_name|slice:':1' }}</span>
+<div>
+<h2>{{ customer }}</h2>
+<small>{{ customer.get_kind_display }}{% if customer.city %} · {{ customer.city }}{% endif %}</small>
+</div>
+<span class="status {{ customer.status }}">{{ customer.get_status_display }}</span>
+</div>
+<div class="customer-meta">
+<span>
+<small>E-MAIL</small>{{ customer.email|default:'—' }}</span>
+<span>
+<small>TELEFOON</small>{{ customer.phone|default:'—' }}</span>
+<span>
+<small>KvK</small>{{ customer.kvk_number|default:'—' }}</span>
+</div>{% if customer.labels %}<div class="labels">{% for label in customer.labels %}<i>{{ label }}</i>{% endfor %}</div>{% endif %}</a>{% empty %}<div class="empty-state">
+<div>♙</div>
+<h2>Geen klanten gevonden</h2>
+<p>Pas je filters aan of voeg de eerste klant toe.</p>
+<a class="btn primary" href="{% url 'customer_create' %}">Nieuwe klant</a>
+</div>{% endfor %}</section>{% if page.paginator.num_pages > 1 %}<nav class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&q={{ query }}&status={{ selected_status }}&kind={{ selected_kind }}">← Vorige</a>{% endif %}<span>Pagina {{ page.number }} van {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?page={{ page.next_page_number }}&q={{ query }}&status={{ selected_status }}&kind={{ selected_kind }}">Volgende →</a>{% endif %}</nav>{% endif %}{% endblock %}

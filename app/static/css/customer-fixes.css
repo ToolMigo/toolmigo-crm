@@ -1,0 +1,45 @@
+.note-form {
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  margin: 16px 0 24px;
+}
+
+.note-form > div,
+.note-form textarea {
+  min-width: 0;
+}
+
+.note-form select,
+.note-form textarea {
+  width: 100%;
+}
+
+.note-form select,
+.note-form .btn {
+  height: 46px;
+}
+
+.note-form textarea {
+  height: 82px;
+  padding: 12px;
+  line-height: 1.45;
+}
+
+.note-form .btn {
+  padding-inline: 18px;
+}
+
+@media (max-width: 800px) {
+  .note-form {
+    grid-template-columns: 1fr;
+  }
+
+  .note-form textarea {
+    height: 100px;
+  }
+
+  .note-form .btn {
+    width: 100%;
+  }
+}

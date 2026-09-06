@@ -1,0 +1,74 @@
+.topbar .user {
+  gap: 10px;
+}
+
+.user-identity {
+  display: block;
+  min-width: 0;
+  max-width: 220px;
+  color: var(--ink);
+  text-align: right;
+  text-decoration: none;
+}
+
+.user-identity > span {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-identity small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar .avatar {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.topbar .avatar-photo {
+  padding: 2px;
+  background: var(--white);
+}
+
+.topbar .avatar-photo img {
+  border-radius: 8px;
+}
+
+.topbar .link-button {
+  padding: 8px 9px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.topbar .link-button:hover {
+  background: var(--mint-light);
+  color: var(--mint-dark);
+}
+
+.topbar .user form {
+  margin: 0;
+}
+
+@media (max-width: 920px) {
+  .topbar .user-identity,
+  .topbar .user > .link-button {
+    display: none;
+  }
+}

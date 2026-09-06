@@ -22,11 +22,11 @@ services:
       COOKIE_SECURE: "0"
       HTTPS_ENABLED: "0"
       TZ: Europe/Amsterdam
-      POSTGRES_HOST: db
+      POSTGRES_HOST: toolmigo-crm-db
       POSTGRES_DB: toolmigo_crm
       POSTGRES_USER: toolmigo
       POSTGRES_PASSWORD: VUL-HIER-EEN-STERK-DATABASEWACHTWOORD-IN
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://toolmigo-crm-redis:6379/0
       BOOTSTRAP_ORG_NAME: ToolMigo
       BOOTSTRAP_ADMIN_NAME: Beheerder
       BOOTSTRAP_ADMIN_EMAIL: beheerder@example.nl
@@ -40,6 +40,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - toolmigo-network
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=3)"]
       interval: 30s
@@ -63,6 +65,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - toolmigo-network
 
   redis:
     image: redis:8-alpine
@@ -79,6 +83,13 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - toolmigo-network
+
+networks:
+  toolmigo-network:
+    name: toolmigo-crm-network
+    driver: bridge
 
 x-casaos:
   id: nl.toolmigo.crm

@@ -9,7 +9,7 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_healthy
+        condition: service_started
     ports:
       - target: 8000
         published: "8088"
@@ -74,10 +74,11 @@ services:
         source: /DATA/AppData/toolmigo-crm/redis
         target: /data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG || exit 1"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 10
+      start_period: 20s
 
 x-casaos:
   id: nl.toolmigo.crm

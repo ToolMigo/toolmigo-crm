@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#fffbf6">
+<link rel="icon" type="image/jpeg" href="{% static 'img/toolmigo-logo.jpeg' %}">
 <script>(function(){const p='{{ user.theme_preference|default:"system"|escapejs }}';const t=p==='system'?localStorage.getItem('toolmigo-theme'):p;document.documentElement.dataset.theme=t||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')})()</script>
 <title>{% block title %}ToolMigo CRM{% endblock %}</title>
 <link rel="stylesheet" href="{% static 'css/app.css' %}">

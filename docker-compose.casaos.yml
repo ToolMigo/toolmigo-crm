@@ -107,7 +107,7 @@ x-casaos:
   description:
     en_us: Secure multi-user CRM for small and medium-sized businesses.
     nl_nl: Veilig CRM voor meerdere gebruikers binnen het midden- en kleinbedrijf.
-  icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/crm.png
+  icon: https://cdn.jsdelivr.net/gh/ToolMigo/toolmigo-crm@main/assets/toolmigo-logo.jpeg
   category: Productivity
   author: ToolMigo
   developer: ToolMigo

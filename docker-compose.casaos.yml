@@ -75,12 +75,20 @@ services:
         target: /data
 
 x-casaos:
-  id: toolmigo-crm
+  id: nl.toolmigo.crm
   main: app
   index: /
   port_map: "8088"
   scheme: http
-  title: ToolMigo CRM
+  title:
+    en_US: ToolMigo CRM
+    nl_NL: ToolMigo CRM
+  tagline:
+    en_US: CRM for customers, quotations, invoicing, planning and tasks
+    nl_NL: CRM voor klanten, offertes, facturatie, planning en taken
+  description:
+    en_US: Secure multi-user CRM for small and medium-sized businesses.
+    nl_NL: Veilig CRM voor meerdere gebruikers binnen het midden- en kleinbedrijf.
   icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/crm.png
   category: Productivity
   author: ToolMigo

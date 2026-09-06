@@ -37,7 +37,7 @@
 <i>↗</i>Verzending</a>
 <a {% if request.resolver_match.url_name == 'calendar' or 'appointment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'calendar' %}">
 <i>□</i>Agenda</a>
-<a {% if 'board' in request.resolver_match.url_name or 'task' in request.resolver_match.url_name or 'checklist' in request.resolver_match.url_name or 'column' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'board_list' %}">
+<a {% if request.resolver_match.url_name == 'board_list' or request.resolver_match.url_name == 'board_create' or request.resolver_match.url_name == 'board_detail' or 'task' in request.resolver_match.url_name or 'checklist' in request.resolver_match.url_name or 'column' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'board_list' %}">
 <i>✓</i>Taken
 </a>{% if active_membership.role == 'owner' %}<span class="nav-label">Beheer</span>
 <a {% if 'product' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'product_list' %}">

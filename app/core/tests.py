@@ -18,6 +18,7 @@ class TenantSecurityTests(TestCase):
         Membership.objects.create(organization=self.a,user=self.worker,role=Membership.Role.EMPLOYEE)
         self.foreign_member=Membership.objects.create(organization=self.b,user=self.foreign,role=Membership.Role.OWNER)
     def test_login_required(self): self.assertRedirects(self.client.get('/'),'/login/?next=/')
+    def test_favicon_uses_toolmigo_logo(self): self.assertRedirects(self.client.get('/favicon.ico'),'/static/img/toolmigo-logo.jpeg',status_code=301,fetch_redirect_response=False)
     def test_employee_cannot_open_team_management(self):
         self.client.force_login(self.worker); self.assertRedirects(self.client.get(reverse('team')),reverse('dashboard'))
     def test_owner_cannot_toggle_foreign_membership(self):

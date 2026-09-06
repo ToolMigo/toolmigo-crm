@@ -156,6 +156,8 @@ def dashboard(request):
     invoices=request.organization.invoices.filter(is_archived=False).prefetch_related('lines','payments')
     open_quotes=quotes.filter(status__in=[Quote.Status.DRAFT,Quote.Status.SUBMITTED,Quote.Status.APPROVED]).count()
     outstanding=sum((invoice.outstanding for invoice in invoices.filter(status__in=[Invoice.Status.SENT,Invoice.Status.PARTIAL,Invoice.Status.OVERDUE])),Decimal('0'))
+    decided_quotes=quotes.filter(status__in=[Quote.Status.ACCEPTED,Quote.Status.DECLINED]).count(); won_quotes=quotes.filter(status=Quote.Status.ACCEPTED).count(); conversion=round(won_quotes*100/decided_quotes) if decided_quotes else 0
+    forecast=sum((x.expected_revenue*Decimal(x.probability)/Decimal('100') for x in request.organization.opportunities.exclude(stage__in=[Opportunity.Stage.WON,Opportunity.Stage.LOST])),Decimal('0'))
     today=timezone.localdate(); now=timezone.now(); notifications=[]
     due_tasks=request.organization.tasks.filter(is_archived=False,completed_at__isnull=True,assignees=request.membership,due_date__lte=now+timedelta(days=2)).distinct()[:5]
     for task in due_tasks: notifications.append({'title':task.title,'detail':f'Taak verloopt {timezone.localtime(task.due_date).strftime("%d-%m-%Y %H:%M") if task.due_date else "binnenkort"}','url':reverse('task_detail',args=[task.board_id,task.id])})
@@ -164,7 +166,7 @@ def dashboard(request):
     if request.membership.role in (Membership.Role.OWNER,Membership.Role.BILLING):
         submitted=quotes.filter(status=Quote.Status.SUBMITTED).count()+invoices.filter(status=Invoice.Status.SUBMITTED).count()
         if submitted: notifications.insert(0,{'title':f'{submitted} document(en) wachten op goedkeuring','detail':'Controleer offertes en facturen.','url':reverse('quote_list')})
-    return render(request,'core/dashboard.html',{'team_count':team.count(),'customer_count':customers.count(),'open_quote_count':open_quotes,'outstanding_total':outstanding,'notifications':notifications[:8],'recent_events':recent,'show_auditlog':is_owner})
+    return render(request,'core/dashboard.html',{'team_count':team.count(),'customer_count':customers.count(),'open_quote_count':open_quotes,'outstanding_total':outstanding,'conversion_rate':conversion,'pipeline_forecast':forecast,'open_ticket_count':request.organization.service_tickets.exclude(status__in=['resolved','closed']).count(),'notifications':notifications[:8],'recent_events':recent,'show_auditlog':is_owner})
 
 @login_required
 def global_search(request):
@@ -264,7 +266,7 @@ def customer_list(request):
 @login_required
 def customer_detail(request,customer_id):
     customer=get_object_or_404(request.organization.customers.select_related('owner__user'),pk=customer_id)
-    return render(request,'core/customer_detail.html',{'customer':customer,'contacts':customer.contacts.filter(is_active=True),'activities':customer.activities.select_related('actor')[:30],'note_form':CustomerNoteForm(),'documents':customer.documents.filter(project__isnull=True),'document_form':ProjectDocumentForm()})
+    return render(request,'core/customer_detail.html',{'customer':customer,'contacts':customer.contacts.filter(is_active=True),'activities':customer.activities.select_related('actor')[:30],'communications':customer.communications.all()[:20],'note_form':CustomerNoteForm(),'documents':customer.documents.filter(project__isnull=True),'document_form':ProjectDocumentForm()})
 
 @login_required
 @require_POST
@@ -925,7 +927,11 @@ def reports(request):
     project_rows=[]
     for project in org.projects.all().prefetch_related('time_entries','expenses','mileage_entries'):
         hours=sum((x.hours for x in project.time_entries.all()),Decimal('0')); labor=sum((x.amount for x in project.time_entries.all()),Decimal('0')); expenses=sum((x.amount for x in project.expenses.all()),Decimal('0'))+sum((x.amount for x in project.mileage_entries.all()),Decimal('0')); project_rows.append({'project':project,'hours':hours,'labor':labor,'expenses':expenses,'margin':project.budget-labor-expenses})
-    return render(request,'core/reports.html',{'start':start,'end':end,'revenue':revenue,'vat':vat,'outstanding':outstanding,'pipeline':pipeline,'projects':project_rows})
+    decided=org.quotes.filter(status__in=[Quote.Status.ACCEPTED,Quote.Status.DECLINED],issue_date__range=[start,end]); conversion=round(decided.filter(status=Quote.Status.ACCEPTED).count()*100/decided.count()) if decided.count() else 0
+    team_rows=[]
+    for member in org.memberships.filter(is_active=True,is_removed=False).select_related('user'):
+        entries=member.time_entries.filter(date__range=[start,end]); team_rows.append({'member':member,'hours':sum((x.hours for x in entries),Decimal('0')),'value':sum((x.amount for x in entries),Decimal('0')),'tasks':member.tasks.filter(completed_at__date__range=[start,end]).count()})
+    return render(request,'core/reports.html',{'start':start,'end':end,'revenue':revenue,'vat':vat,'outstanding':outstanding,'pipeline':pipeline,'projects':project_rows,'conversion':conversion,'team_rows':team_rows})
 
 @login_required
 @owner_required

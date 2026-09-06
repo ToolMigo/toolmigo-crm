@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from core.backups import create_backup, run_pending_restore
 from core.models import BackupConfiguration
-from core.automation import generate_recurring_drafts, queue_payment_reminders
+from core.automation import generate_recurring_drafts, queue_payment_reminders, refresh_system_alerts
 
 class Command(BaseCommand):
     help='Maakt geplande back-ups volgens de instellingen in het CRM.'
@@ -26,4 +26,9 @@ class Command(BaseCommand):
                     generated=generate_recurring_drafts(); reminders=queue_payment_reminders()
                     if generated or reminders: self.stdout.write(f'Automatisering: {len(generated)} conceptfacturen, {len(reminders)} herinneringen.')
                 except Exception as exc: self.stderr.write(f'Financiële automatisering mislukt: {exc}')
+            if now.minute%15==0 and cache.add('system-monitor-lock',now.strftime('%Y%m%d%H%M'),timeout=840):
+                try:
+                    alerts=refresh_system_alerts()
+                    if alerts: self.stdout.write(f'Systeembewaking: {len(alerts)} nieuwe melding(en).')
+                except Exception as exc: self.stderr.write(f'Systeembewaking mislukt: {exc}')
             time.sleep(30)

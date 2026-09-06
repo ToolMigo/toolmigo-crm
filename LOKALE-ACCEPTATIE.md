@@ -27,6 +27,19 @@ Publicatie naar GitHub en installatie in CasaOS blijven geblokkeerd totdat de ei
 - [ ] Definitieve versie/tag bepalen.
 - [ ] Expliciet toestemming geven voor GitHub-publicatie en daarna CasaOS-upgrade.
 
+## Aanvullende acceptatie voor versie 1.2
+
+- [ ] SMTP-uitgaand en inkomende communicatie-API met een testmailbox beproeven.
+- [ ] Mollie uitsluitend met een test-API-key activeren en een testbetaling plus webhook controleren.
+- [ ] Een bank-CSV eerst als kopie/proefbestand importeren en de gevonden factuurmatching beoordelen.
+- [ ] Offerte en factuur met elk documentsjabloon visueel als PDF beoordelen.
+- [ ] Voorraadcorrectie, contractwaarschuwing, serviceticket en mobiele werkbon doorlopen.
+- [ ] CalDAV met een testagenda synchroniseren; Google/Microsoft vereisen eigen OAuth-registratie.
+- [ ] Ondertekenlink in een privévenster testen en controleren dat hergebruik wordt geweigerd.
+- [ ] API- en webhookgeheimen aanmaken, buiten het CRM bewaren en daarna met testdata controleren.
+- [ ] PWA op iPhone/Brave en Android/Chromium installeren en online/offline gedrag beoordelen.
+- [ ] Alle systeemwaarschuwingen nalopen en pas daarna een definitief versienummer kiezen.
+
 ## Veilige upgradevolgorde
 
 1. Maak en download een actuele back-up.

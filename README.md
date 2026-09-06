@@ -79,4 +79,6 @@ De tests controleren login, rollen, organisatie-isolatie, klantdossiers, btw- en
 
 ## Huidige reikwijdte
 
-Lokaal beschikbaar: fundament, rollen en auditlog, 2FA, bedrijfsprofiel, klanten en contactpersonen, verkoopkansen, offertes, facturen, betalingen, creditfacturen, terugkerende conceptfacturen, betalingsherinneringen, boekhoudexport, teamagenda, Kanban, projecten, uren, kilometers, onkosten, beschermde documenten, klantportaal, rapportages, zoekfunctie, prullenbak, back-upplanning en beheerst herstel. Zie `LOKALE-ACCEPTATIE.md` voordat een versie wordt gepubliceerd.
+Lokaal beschikbaar: fundament, rollen en auditlog, 2FA, bedrijfsprofiel, klanten en contactpersonen, verkoopkansen, offertes, facturen, betalingen, creditfacturen, terugkerende conceptfacturen, betalingsherinneringen, boekhoudexport, teamagenda, Kanban, projecten, uren, kilometers, onkosten, beschermde documenten, klantportaal, rapportages, zoekfunctie, prullenbak, back-upplanning en beheerst herstel.
+
+De lokale 1.2-uitbreidingsronde voegt daar het e-mailcentrum, Mollie-betaallinks, bankimport en matching, documentsjablonen, voorraadbeheer, contracten, servicetickets, routes en mobiele werkbonnen, CalDAV/iCalendar, digitale ondertekening, geavanceerde dashboards, een proefimportwizard, tenant-API en webhooks, PWA/offline-cache en systeembewaking aan toe. Externe integraties blijven uitgeschakeld totdat een beheerder geldige test- of productiegegevens invoert en ze expliciet activeert. Zie `LOKALE-ACCEPTATIE.md` voordat een versie wordt gepubliceerd.

@@ -11,6 +11,7 @@
   <article><span>Openstaande offertes</span><b>{{ open_quote_count }}</b><i class="peach">▤</i></article>
   <article><span>Openstaand bedrag</span><b>€ {{ outstanding_total|floatformat:2 }}</b><i class="lime">€</i></article>
 </div>
+<div class="stats" style="margin-top:18px"><article><span>Offerteconversie</span><b>{{ conversion_rate }}%</b><i class="mint">%</i></article><article><span>Gewogen prognose</span><b>€ {{ pipeline_forecast|floatformat:0 }}</b><i class="yellow">↗</i></article><article><span>Open servicetickets</span><b>{{ open_ticket_count }}</b><i class="peach">!</i></article><article><span>Werkruimte</span><b>CRM+</b><a class="text-link" href="{% url 'operations_hub' %}">Openen</a></article></div>
 <section class="card activity" style="margin-top:18px"><div class="card-head"><div><span class="eyebrow">VOOR JOU</span><h2>Meldingen en opvolging</h2></div></div>{% for item in notifications %}<a class="activity-row" href="{{ item.url }}"><i></i><div><b>{{ item.title }}</b><small>{{ item.detail }}</small></div></a>{% empty %}<div class="empty"><b>Alles bijgewerkt</b><span>Er zijn geen dringende taken, afspraken of goedkeuringen.</span></div>{% endfor %}</section>
 {% if show_auditlog %}
 <section class="card activity" style="margin-top:18px">

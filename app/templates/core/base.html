@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#fffbf6">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="apple-touch-icon" href="{% static 'img/toolmigo-logo.jpeg' %}"><link rel="manifest" href="{% static 'manifest.webmanifest' %}">
 <link rel="icon" type="image/jpeg" href="{% static 'img/toolmigo-logo.jpeg' %}">
 <script>(function(){const p='{{ user.theme_preference|default:"system"|escapejs }}';const t=p==='system'?localStorage.getItem('toolmigo-theme'):p;document.documentElement.dataset.theme=t||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')})()</script>
 <title>{% block title %}ToolMigo CRM{% endblock %}</title>
@@ -44,7 +45,7 @@
 <i>□</i>Agenda</a>
 <a {% if request.resolver_match.url_name == 'board_list' or request.resolver_match.url_name == 'board_create' or request.resolver_match.url_name == 'board_detail' or 'task' in request.resolver_match.url_name or 'checklist' in request.resolver_match.url_name or 'column' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'board_list' %}">
 <i>✓</i>Taken
-</a>{% if active_membership.role == 'owner' %}<span class="nav-label">Beheer</span>
+</a><a {% if request.resolver_match.url_name == 'operations_hub' or 'communication' in request.resolver_match.url_name or 'contract' in request.resolver_match.url_name or 'ticket' in request.resolver_match.url_name or 'work_order' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'operations_hub' %}"><i>◫</i>Werkruimte</a>{% if active_membership.role == 'owner' %}<span class="nav-label">Beheer</span>
 <a {% if 'product' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'product_list' %}">
 <i>◇</i>Producten</a>
 <a {% if 'organization_settings' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'organization_settings' %}"><i>⌘</i>Bedrijfsprofiel</a>
@@ -53,6 +54,10 @@
 <a {% if request.resolver_match.url_name == 'email_settings' %}class="active"{% endif %} href="{% url 'email_settings' %}"><i>✉</i>E-mailinstellingen</a>
 <a {% if request.resolver_match.url_name == 'reminder_settings' or request.resolver_match.url_name == 'email_template_edit' %}class="active"{% endif %} href="{% url 'reminder_settings' %}"><i>⌁</i>Financiële automatisering</a>
 <a {% if request.resolver_match.url_name == 'bookkeeping_export' %}class="active"{% endif %} href="{% url 'bookkeeping_export' %}"><i>⇩</i>Boekhoudexport</a>
+<a {% if request.resolver_match.url_name == 'data_import' %}class="active"{% endif %} href="{% url 'data_import' %}"><i>⇧</i>Importwizard</a>
+<a {% if 'template_' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'template_list' %}"><i>▧</i>Documentsjablonen</a>
+<a {% if 'integration' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'integration_list' %}"><i>⌁</i>Integraties</a>
+<a {% if request.resolver_match.url_name == 'system_monitor' %}class="active"{% endif %} href="{% url 'system_monitor' %}"><i>◉</i>Bewaking</a>
 <a {% if 'backup' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'backups' %}"><i>↻</i>Back-ups</a>
 <a {% if 'trash' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'trash' %}"><i>♲</i>Prullenbak</a>
 <a {% if request.resolver_match.url_name == 'system_info' %}class="active"{% endif %} href="{% url 'system_info' %}"><i>ⓘ</i>Systeem{% if available_version != app_version %}<em>UPDATE</em>{% endif %}</a>{% endif %}</nav>
@@ -92,6 +97,7 @@
 </div>
 <script src="{% static 'js/theme.js' %}">
 </script>
+<script src="{% static 'js/pwa.js' %}"></script>
 <script>document.querySelector('.mobile-menu')?.addEventListener('click',()=>document.body.classList.toggle('menu-open'))</script>
 </body>
 </html>

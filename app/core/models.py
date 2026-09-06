@@ -180,7 +180,7 @@ class Product(models.Model):
     organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='products')
     code=models.CharField(max_length=40); name=models.CharField(max_length=180); description=models.TextField(blank=True)
     kind=models.CharField(max_length=12,choices=Kind.choices,default=Kind.SERVICE)
-    unit=models.CharField(max_length=30,default='stuk'); unit_price=models.DecimalField(max_digits=12,decimal_places=2,default=0)
+    unit=models.CharField(max_length=30,default='stuk'); unit_price=models.DecimalField(max_digits=12,decimal_places=2,default=0); purchase_price=models.DecimalField(max_digits=12,decimal_places=2,default=0); stock_quantity=models.DecimalField(max_digits=12,decimal_places=2,default=0); minimum_stock=models.DecimalField(max_digits=12,decimal_places=2,default=0); track_stock=models.BooleanField(default=False)
     vat_rate=models.DecimalField(max_digits=5,decimal_places=2,default=21)
     is_active=models.BooleanField(default=True); created_at=models.DateTimeField(auto_now_add=True); updated_at=models.DateTimeField(auto_now=True)
     class Meta: ordering=['name']; constraints=[models.UniqueConstraint(fields=['organization','code'],name='unique_org_product_code')]
@@ -409,3 +409,75 @@ class PortalAccess(models.Model):
 class PortalDecision(models.Model):
     class Decision(models.TextChoices): ACCEPTED='accepted','Geaccepteerd'; DECLINED='declined','Afgewezen'
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.PROTECT,related_name='portal_decisions'); portal_access=models.ForeignKey(PortalAccess,on_delete=models.PROTECT,related_name='decisions'); quote=models.OneToOneField(Quote,on_delete=models.PROTECT,related_name='portal_decision'); decision=models.CharField(max_length=10,choices=Decision.choices); signer_name=models.CharField(max_length=200); reason=models.TextField(blank=True); document_sha256=models.CharField(max_length=64); ip_address=models.GenericIPAddressField(null=True,blank=True); created_at=models.DateTimeField(auto_now_add=True)
+
+class Communication(models.Model):
+    class Direction(models.TextChoices): OUT='out','Uitgaand'; IN='in','Inkomend'
+    class Status(models.TextChoices): DRAFT='draft','Concept'; QUEUED='queued','In wachtrij'; SENT='sent','Verzonden'; RECEIVED='received','Ontvangen'; FAILED='failed','Mislukt'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='communications'); customer=models.ForeignKey(Customer,on_delete=models.CASCADE,related_name='communications'); contact=models.ForeignKey(Contact,on_delete=models.SET_NULL,null=True,blank=True); direction=models.CharField(max_length=3,choices=Direction.choices,default=Direction.OUT); status=models.CharField(max_length=10,choices=Status.choices,default=Status.DRAFT); subject=models.CharField(max_length=250); body=models.TextField(); sender=models.EmailField(blank=True); recipient=models.EmailField(); external_id=models.CharField(max_length=180,blank=True); error=models.TextField(blank=True); created_by=models.ForeignKey(User,on_delete=models.PROTECT); created_at=models.DateTimeField(auto_now_add=True); sent_at=models.DateTimeField(null=True,blank=True)
+    class Meta: ordering=['-created_at']; indexes=[models.Index(fields=['organization','customer','created_at'])]
+
+class PaymentLink(models.Model):
+    class Status(models.TextChoices): DRAFT='draft','Concept'; OPEN='open','Open'; PAID='paid','Betaald'; EXPIRED='expired','Verlopen'; FAILED='failed','Mislukt'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='payment_links'); invoice=models.ForeignKey(Invoice,on_delete=models.PROTECT,related_name='payment_links'); provider=models.CharField(max_length=30,default='mollie'); provider_id=models.CharField(max_length=120,blank=True); checkout_url=models.URLField(blank=True); amount=models.DecimalField(max_digits=12,decimal_places=2); status=models.CharField(max_length=10,choices=Status.choices,default=Status.DRAFT); expires_at=models.DateTimeField(null=True,blank=True); created_by=models.ForeignKey(User,on_delete=models.PROTECT); created_at=models.DateTimeField(auto_now_add=True); paid_at=models.DateTimeField(null=True,blank=True)
+
+class BankTransaction(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='bank_transactions'); booking_date=models.DateField(); amount=models.DecimalField(max_digits=12,decimal_places=2); counterparty=models.CharField(max_length=200,blank=True); iban=models.CharField(max_length=34,blank=True); reference=models.CharField(max_length=300); import_hash=models.CharField(max_length=64); invoice=models.ForeignKey(Invoice,on_delete=models.SET_NULL,null=True,blank=True,related_name='bank_transactions'); matched_at=models.DateTimeField(null=True,blank=True); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['-booking_date']; constraints=[models.UniqueConstraint(fields=['organization','import_hash'],name='unique_org_bank_import_hash')]
+
+class DocumentTemplate(models.Model):
+    class Kind(models.TextChoices): QUOTE='quote','Offerte'; INVOICE='invoice','Factuur'; CONTRACT='contract','Contract'; WORK_ORDER='work_order','Werkbon'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='document_templates'); kind=models.CharField(max_length=20,choices=Kind.choices); name=models.CharField(max_length=120); header=models.TextField(blank=True); footer=models.TextField(blank=True); primary_color=models.CharField(max_length=7,default='#239f7f'); layout=models.JSONField(default=list,blank=True); is_default=models.BooleanField(default=False); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['kind','name']; constraints=[models.UniqueConstraint(fields=['organization','kind','name'],name='unique_org_document_template')]
+
+class StockMovement(models.Model):
+    class Kind(models.TextChoices): IN='in','Inkoop'; OUT='out','Verkoop/verbruik'; CORRECTION='correction','Correctie'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='stock_movements'); product=models.ForeignKey(Product,on_delete=models.PROTECT,related_name='stock_movements'); kind=models.CharField(max_length=12,choices=Kind.choices); quantity=models.DecimalField(max_digits=12,decimal_places=2); reason=models.CharField(max_length=240); created_by=models.ForeignKey(User,on_delete=models.PROTECT); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['-created_at']
+
+class Contract(models.Model):
+    class Status(models.TextChoices): DRAFT='draft','Concept'; ACTIVE='active','Actief'; ENDED='ended','Beëindigd'; CANCELLED='cancelled','Opgezegd'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='contracts'); customer=models.ForeignKey(Customer,on_delete=models.PROTECT,related_name='contracts'); title=models.CharField(max_length=200); status=models.CharField(max_length=12,choices=Status.choices,default=Status.DRAFT); start_date=models.DateField(); end_date=models.DateField(null=True,blank=True); notice_days=models.PositiveSmallIntegerField(default=30); auto_renew=models.BooleanField(default=False); value=models.DecimalField(max_digits=12,decimal_places=2,default=0); terms=models.TextField(blank=True); owner=models.ForeignKey(Membership,on_delete=models.SET_NULL,null=True,blank=True); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['end_date','title']; indexes=[models.Index(fields=['organization','status','end_date'])]
+    def __str__(self): return self.title
+
+class ServiceTicket(models.Model):
+    class Status(models.TextChoices): OPEN='open','Open'; WORKING='working','In behandeling'; WAITING='waiting','Wacht op klant'; RESOLVED='resolved','Opgelost'; CLOSED='closed','Gesloten'
+    class Priority(models.TextChoices): LOW='low','Laag'; NORMAL='normal','Normaal'; HIGH='high','Hoog'; URGENT='urgent','Urgent'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='service_tickets'); customer=models.ForeignKey(Customer,on_delete=models.PROTECT,related_name='service_tickets'); subject=models.CharField(max_length=200); description=models.TextField(); status=models.CharField(max_length=12,choices=Status.choices,default=Status.OPEN); priority=models.CharField(max_length=10,choices=Priority.choices,default=Priority.NORMAL); assignee=models.ForeignKey(Membership,on_delete=models.SET_NULL,null=True,blank=True,related_name='service_tickets'); due_at=models.DateTimeField(null=True,blank=True); created_by=models.ForeignKey(User,on_delete=models.PROTECT); created_at=models.DateTimeField(auto_now_add=True); updated_at=models.DateTimeField(auto_now=True)
+    class Meta: ordering=['-created_at']; indexes=[models.Index(fields=['organization','status','priority'])]
+    def __str__(self): return self.subject
+
+def workorder_photo_path(instance,filename): return f'organizations/{instance.organization_id}/workorders/{instance.id}/{uuid.uuid4().hex}_{filename}'
+class WorkOrder(models.Model):
+    class Status(models.TextChoices): PLANNED='planned','Gepland'; EN_ROUTE='en_route','Onderweg'; WORKING='working','Bezig'; COMPLETED='completed','Afgerond'; CANCELLED='cancelled','Geannuleerd'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='work_orders'); customer=models.ForeignKey(Customer,on_delete=models.PROTECT,related_name='work_orders'); ticket=models.ForeignKey(ServiceTicket,on_delete=models.SET_NULL,null=True,blank=True,related_name='work_orders'); assigned_to=models.ForeignKey(Membership,on_delete=models.SET_NULL,null=True,blank=True,related_name='work_orders'); title=models.CharField(max_length=200); address=models.CharField(max_length=250); scheduled_start=models.DateTimeField(); scheduled_end=models.DateTimeField(); route_position=models.PositiveSmallIntegerField(default=1); status=models.CharField(max_length=12,choices=Status.choices,default=Status.PLANNED); report=models.TextField(blank=True); photo=models.ImageField(upload_to=workorder_photo_path,blank=True); customer_signature=models.TextField(blank=True); signed_at=models.DateTimeField(null=True,blank=True); created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=['scheduled_start','route_position']
+    def __str__(self): return self.title
+
+class CalendarConnection(models.Model):
+    class Provider(models.TextChoices): CALDAV='caldav','CalDAV'; GOOGLE='google','Google Calendar'; MICROSOFT='microsoft','Microsoft 365'
+    organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='calendar_connections'); membership=models.ForeignKey(Membership,on_delete=models.CASCADE,related_name='calendar_connections'); provider=models.CharField(max_length=15,choices=Provider.choices); endpoint=models.URLField(blank=True); account=models.CharField(max_length=200); secret_encrypted=models.TextField(blank=True); calendar_id=models.CharField(max_length=200,blank=True); enabled=models.BooleanField(default=False); last_sync_at=models.DateTimeField(null=True,blank=True); last_error=models.TextField(blank=True)
+    class Meta: constraints=[models.UniqueConstraint(fields=['membership','provider','account'],name='unique_calendar_connection')]
+
+class SignatureRequest(models.Model):
+    class Status(models.TextChoices): PENDING='pending','In afwachting'; SIGNED='signed','Ondertekend'; DECLINED='declined','Afgewezen'; EXPIRED='expired','Verlopen'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.PROTECT,related_name='signature_requests'); quote=models.ForeignKey(Quote,on_delete=models.PROTECT,null=True,blank=True,related_name='signature_requests'); contract=models.ForeignKey(Contract,on_delete=models.PROTECT,null=True,blank=True,related_name='signature_requests'); signer_email=models.EmailField(); signer_name=models.CharField(max_length=200,blank=True); token_digest=models.CharField(max_length=64,unique=True); document_sha256=models.CharField(max_length=64); status=models.CharField(max_length=10,choices=Status.choices,default=Status.PENDING); expires_at=models.DateTimeField(); signed_at=models.DateTimeField(null=True,blank=True); ip_address=models.GenericIPAddressField(null=True,blank=True); evidence=models.JSONField(default=dict,blank=True); created_at=models.DateTimeField(auto_now_add=True)
+
+class IntegrationEndpoint(models.Model):
+    class Kind(models.TextChoices): WEBHOOK='webhook','Webhook'; MOLLIE='mollie','Mollie'; IMPORT='import','Import'; CALENDAR='calendar','Agenda'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='integrations'); kind=models.CharField(max_length=12,choices=Kind.choices); name=models.CharField(max_length=120); endpoint=models.URLField(blank=True); secret_encrypted=models.TextField(blank=True); enabled=models.BooleanField(default=False); events=models.JSONField(default=list,blank=True); last_success_at=models.DateTimeField(null=True,blank=True); last_error=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True)
+    def set_secret(self,value):
+        from .encryption import encrypt_secret
+        self.secret_encrypted=encrypt_secret(value) if value else ''
+    def get_secret(self):
+        from .encryption import decrypt_secret
+        return decrypt_secret(self.secret_encrypted) if self.secret_encrypted else ''
+
+class WebhookDelivery(models.Model):
+    class Status(models.TextChoices): QUEUED='queued','In wachtrij'; SENT='sent','Verzonden'; FAILED='failed','Mislukt'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='webhook_deliveries'); endpoint=models.ForeignKey(IntegrationEndpoint,on_delete=models.CASCADE,related_name='deliveries'); event=models.CharField(max_length=100); payload=models.JSONField(default=dict); status=models.CharField(max_length=10,choices=Status.choices,default=Status.QUEUED); attempts=models.PositiveSmallIntegerField(default=0); response_code=models.PositiveSmallIntegerField(null=True,blank=True); error=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True); sent_at=models.DateTimeField(null=True,blank=True)
+
+class SystemAlert(models.Model):
+    class Severity(models.TextChoices): INFO='info','Info'; WARNING='warning','Waarschuwing'; CRITICAL='critical','Kritiek'
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); organization=models.ForeignKey(Organization,on_delete=models.CASCADE,related_name='system_alerts',null=True,blank=True); severity=models.CharField(max_length=10,choices=Severity.choices,default=Severity.INFO); code=models.CharField(max_length=80); title=models.CharField(max_length=200); details=models.TextField(blank=True); is_resolved=models.BooleanField(default=False); created_at=models.DateTimeField(auto_now_add=True); resolved_at=models.DateTimeField(null=True,blank=True)
+    class Meta: ordering=['is_resolved','-created_at']; indexes=[models.Index(fields=['organization','is_resolved','severity'])]

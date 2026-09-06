@@ -45,7 +45,7 @@ SECURE_SSL_REDIRECT=os.environ.get('HTTPS_ENABLED','0')=='1'
 SECURE_HSTS_SECONDS=31536000 if SECURE_SSL_REDIRECT else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS=SECURE_SSL_REDIRECT; SECURE_HSTS_PRELOAD=SECURE_SSL_REDIRECT
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
-APP_VERSION=os.environ.get('APP_VERSION','1.1.1')
+APP_VERSION=os.environ.get('APP_VERSION','1.2.0-local')
 AVAILABLE_VERSION=os.environ.get('AVAILABLE_VERSION',APP_VERSION)
 EMAIL_BACKEND=os.environ.get('EMAIL_BACKEND','django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST=os.environ.get('EMAIL_HOST',''); EMAIL_PORT=int(os.environ.get('EMAIL_PORT','587')); EMAIL_HOST_USER=os.environ.get('EMAIL_HOST_USER',''); EMAIL_HOST_PASSWORD=os.environ.get('EMAIL_HOST_PASSWORD',''); EMAIL_USE_TLS=os.environ.get('EMAIL_USE_TLS','1')=='1'; DEFAULT_FROM_EMAIL=os.environ.get('DEFAULT_FROM_EMAIL','noreply@localhost')

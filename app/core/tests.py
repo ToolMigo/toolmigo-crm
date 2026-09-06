@@ -3,12 +3,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.mail import get_connection
 from unittest.mock import patch
 import pyotp
+import json
 from django.urls import reverse
 from datetime import date, timedelta
 from decimal import Decimal
 from django.utils import timezone
-from .models import Appointment, AppointmentType, AuditEvent, Board, BoardColumn, Contact, Customer, CustomerActivity, EmailDelivery, Invoice, InvoiceLine, Membership, Opportunity, Organization, OrganizationEmailSettings, Payment, PaymentReminder, PortalAccess, PortalDecision, Product, Project, Quote, QuoteLine, RecurringInvoiceSchedule, ReminderPolicy, Task, TaskAttachment, TaskChecklistItem, TimeEntry, User
-from .automation import generate_recurring_drafts, queue_payment_reminders
+from .models import Appointment, AppointmentType, AuditEvent, BankTransaction, Board, BoardColumn, Communication, Contact, Contract, Customer, CustomerActivity, DocumentTemplate, EmailDelivery, IntegrationEndpoint, Invoice, InvoiceLine, Membership, Opportunity, Organization, OrganizationEmailSettings, Payment, PaymentLink, PaymentReminder, PortalAccess, PortalDecision, Product, Project, Quote, QuoteLine, RecurringInvoiceSchedule, ReminderPolicy, ServiceTicket, SignatureRequest, StockMovement, SystemAlert, Task, TaskAttachment, TaskChecklistItem, TimeEntry, User
+from .automation import generate_recurring_drafts, queue_payment_reminders, refresh_system_alerts
+from .extensions import _parse_bank_rows
 
 class TenantSecurityTests(TestCase):
     def setUp(self):
@@ -259,3 +261,37 @@ class ProfileSettingsTests(TestCase):
         gif=SimpleUploadedFile('avatar.gif',b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',content_type='image/gif'); self.client.post(reverse('profile_settings'),{'display_name':self.user.display_name,'email':self.user.email,'theme_preference':'system','avatar':gif}); self.user.refresh_from_db(); self.assertTrue(self.user.avatar); self.assertEqual(self.client.get(reverse('profile_avatar',args=[self.user.id])).status_code,200)
     def test_invalid_avatar_is_rejected(self):
         bad=SimpleUploadedFile('avatar.jpg',b'geen echte afbeelding',content_type='image/jpeg'); response=self.client.post(reverse('profile_settings'),{'display_name':self.user.display_name,'email':self.user.email,'theme_preference':'system','avatar':bad}); self.assertEqual(response.status_code,200); self.user.refresh_from_db(); self.assertFalse(self.user.avatar)
+
+class ExtensionSecurityTests(TestCase):
+    def setUp(self):
+        self.org=Organization.objects.create(name='Uitbreiding A',slug='ext-a'); self.other=Organization.objects.create(name='Uitbreiding B',slug='ext-b'); self.owner=User.objects.create_user(email='ext-owner@example.nl',display_name='Eigenaar',password='CorrectHorseBattery!1'); self.worker=User.objects.create_user(email='ext-worker@example.nl',display_name='Werker',password='CorrectHorseBattery!1'); self.member=Membership.objects.create(organization=self.org,user=self.owner,role=Membership.Role.OWNER); Membership.objects.create(organization=self.org,user=self.worker,role=Membership.Role.EMPLOYEE); self.customer=Customer.objects.create(organization=self.org,legal_name='Klant A',email='klant@example.nl'); self.foreign_customer=Customer.objects.create(organization=self.other,legal_name='Klant B'); self.client.force_login(self.owner)
+    def test_contract_crud_is_tenant_scoped(self):
+        response=self.client.post(reverse('contract_create'),{'customer':self.customer.id,'title':'Onderhoud','status':'active','start_date':date.today(),'notice_days':30,'value':'1200','terms':'Voorwaarden'}); self.assertEqual(response.status_code,302); contract=Contract.objects.get(organization=self.org); self.assertEqual(contract.title,'Onderhoud'); foreign=Contract.objects.create(organization=self.other,customer=self.foreign_customer,title='Verborgen',start_date=date.today()); self.assertEqual(self.client.get(reverse('contract_edit',args=[foreign.id])).status_code,404)
+    def test_stock_movement_is_atomic_and_tenant_scoped(self):
+        product=Product.objects.create(organization=self.org,code='STK',name='Voorraad',track_stock=True,stock_quantity=5,minimum_stock=2); self.client.post(reverse('stock_movement'),{'product':product.id,'kind':'out','quantity':'3','reason':'Werkbon'}); product.refresh_from_db(); self.assertEqual(product.stock_quantity,Decimal('2')); self.assertTrue(StockMovement.objects.filter(product=product,organization=self.org).exists())
+    def test_employee_cannot_access_financial_extensions(self):
+        self.client.force_login(self.worker); self.assertRedirects(self.client.get(reverse('inventory')),reverse('dashboard')); self.assertRedirects(self.client.get(reverse('bank_import')),reverse('dashboard')); self.assertRedirects(self.client.get(reverse('integration_list')),reverse('dashboard'))
+    def test_signature_is_one_time_and_records_evidence(self):
+        contract=Contract.objects.create(organization=self.org,customer=self.customer,title='Tekenbaar',start_date=date.today(),terms='Akkoord'); self.client.post(reverse('signature_create'),{'contract':contract.id,'email':'tekenaar@example.nl'}); item=SignatureRequest.objects.get(contract=contract); token=self.client.session['signature_token'].rsplit('/',2)[-2]; self.client.logout(); response=self.client.post(reverse('signature_public',args=[token]),{'name':'Tekenaar Naam','decision':'signed'},HTTP_USER_AGENT='Testbrowser',REMOTE_ADDR='127.0.0.1'); self.assertContains(response,'Keuze vastgelegd'); item.refresh_from_db(); self.assertEqual(item.status,'signed'); self.assertEqual(item.ip_address,'127.0.0.1'); self.assertEqual(self.client.get(reverse('signature_public',args=[token])).status_code,410)
+    def test_api_token_cannot_cross_tenants(self):
+        endpoint=IntegrationEndpoint(organization=self.org,kind='import',name='API',enabled=True); endpoint.set_secret('api-secret'); endpoint.save(); response=self.client.get(reverse('api_customers'),HTTP_AUTHORIZATION='Bearer api-secret'); self.assertEqual(response.status_code,200); names=[x['name'] for x in response.json()['results']]; self.assertIn('Klant A',names); self.assertNotIn('Klant B',names); self.assertEqual(self.client.get(reverse('api_customers'),HTTP_AUTHORIZATION='Bearer fout').status_code,401)
+    def test_incoming_communication_api_links_customer(self):
+        endpoint=IntegrationEndpoint(organization=self.org,kind='import',name='Mailbox',enabled=True); endpoint.set_secret('mail-secret'); endpoint.save(); payload={'customer_id':str(self.customer.id),'subject':'Antwoord','body':'Binnengekomen','sender':'klant@example.nl','recipient':'info@example.nl'}; response=self.client.post(reverse('api_communications'),data=json.dumps(payload),content_type='application/json',HTTP_AUTHORIZATION='Bearer mail-secret'); self.assertEqual(response.status_code,201); self.assertTrue(Communication.objects.filter(organization=self.org,direction='in',status='received').exists())
+    def test_bank_import_is_idempotent_and_matches_exact_invoice(self):
+        invoice=Invoice.objects.create(organization=self.org,customer=self.customer,created_by=self.owner,number='FAC-2026-0042',status=Invoice.Status.SENT,issue_date=date.today(),delivery_date=date.today(),due_date=date.today()); InvoiceLine.objects.create(organization=self.org,invoice=invoice,description='Werk',quantity=1,unit_price=100,vat_rate=0); content=f'datum;bedrag;omschrijving\n{date.today().isoformat()};100,00;Betaling FAC-2026-0042\n'.encode()
+        for _ in range(2): self.client.post(reverse('bank_import'),{'file':SimpleUploadedFile('bank.csv',content)})
+        self.assertEqual(BankTransaction.objects.filter(organization=self.org).count(),1); self.assertEqual(Payment.objects.filter(invoice=invoice).count(),1)
+    def test_monitoring_deduplicates_open_alerts(self):
+        Product.objects.create(organization=self.org,code='LOW',name='Laag',track_stock=True,stock_quantity=0,minimum_stock=2); refresh_system_alerts(); refresh_system_alerts(); self.assertEqual(SystemAlert.objects.filter(organization=self.org,code='low_stock',is_resolved=False).count(),1)
+    def test_pwa_assets_are_served(self):
+        response=self.client.get(reverse('service_worker')); self.assertEqual(response.status_code,200); self.assertEqual(response['Service-Worker-Allowed'],'/')
+    def test_camt_and_mt940_are_parsed(self):
+        camt='<?xml version="1.0"?><Document><Ntry><Amt>12.34</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-09-06</Dt></BookgDt><AddtlNtryInf>FAC-1</AddtlNtryInf></Ntry></Document>'; mt940=':20:START\n:61:260906C99,95NTRF\n:86:Betaling FAC-2'
+        self.assertEqual(_parse_bank_rows(camt)[0]['bedrag'],'12.34'); self.assertEqual(_parse_bank_rows(mt940)[0]['bedrag'],'99,95'); self.assertEqual(_parse_bank_rows(mt940)[0]['datum'],'2026-09-06')
+    def test_document_template_layout_is_saved(self):
+        response=self.client.post(reverse('template_create'),{'kind':'invoice','name':'Modern','header':'Kop','footer':'Voet','primary_color':'#123456','is_default':'on','layout_order':'header,lines,totals,footer'}); self.assertRedirects(response,reverse('template_list')); item=DocumentTemplate.objects.get(organization=self.org); self.assertEqual(item.layout,['header','lines','totals','footer']); self.assertTrue(item.is_default)
+    def test_mollie_webhook_books_payment_only_once(self):
+        invoice=Invoice.objects.create(organization=self.org,customer=self.customer,created_by=self.owner,number='FAC-MOL',status=Invoice.Status.SENT,issue_date=date.today(),delivery_date=date.today(),due_date=date.today()); InvoiceLine.objects.create(organization=self.org,invoice=invoice,description='Werk',quantity=1,unit_price=25,vat_rate=0); integration=IntegrationEndpoint(organization=self.org,kind='mollie',name='Mollie',enabled=True); integration.set_secret('test_x'); integration.save(); link=PaymentLink.objects.create(organization=self.org,invoice=invoice,provider_id='tr_test',amount=25,status='open',created_by=self.owner)
+        fake=type('Response',(),{'read':lambda self:b'{"status":"paid"}'})()
+        with patch('core.extensions.urllib.request.urlopen',return_value=fake): self.client.post(reverse('mollie_webhook'),{'id':'tr_test'}); self.client.post(reverse('mollie_webhook'),{'id':'tr_test'})
+        link.refresh_from_db(); self.assertEqual(link.status,'paid'); self.assertEqual(Payment.objects.filter(invoice=invoice,reference='Mollie tr_test').count(),1)

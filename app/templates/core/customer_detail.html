@@ -107,6 +107,7 @@
 <span class="eyebrow">DOCUMENTEN</span>
 <h3>Klantbestanden</h3><form method="post" enctype="multipart/form-data" action="{% url 'customer_document_add' customer.id %}">{% csrf_token %}{% for field in document_form %}{% include 'core/form_field.html' with field=field %}{% endfor %}<button class="btn primary">Toevoegen</button></form>{% for item in documents %}<a class="activity-row" href="{% url 'project_document_download' item.id %}"><i></i><div><b>{{ item.title }}</b><small>{{ item.original_name }}{% if item.visible_to_portal %} · zichtbaar in portaal{% endif %}</small></div></a>{% empty %}<div class="empty">Nog geen bestanden.</div>{% endfor %}
 </section>
+<section class="card side-card"><span class="eyebrow">COMMUNICATIE</span>{% for item in communications %}<div class="activity-row"><i></i><div><b>{{ item.subject }}</b><small>{{ item.get_direction_display }} · {{ item.get_status_display }} · {{ item.created_at|date:'d-m-Y H:i' }}</small></div></div>{% empty %}<div class="empty">Nog geen gekoppelde e-mails.</div>{% endfor %}</section>
 </aside>
 </div>
 <dialog id="archive-dialog">

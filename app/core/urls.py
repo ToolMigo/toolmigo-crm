@@ -1,6 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
-from . import views
+from . import views, extensions
 urlpatterns=[
     path('health/',views.health,name='health'),
     path('login/',views.SecureLoginView.as_view(),name='login'),
@@ -51,4 +51,17 @@ urlpatterns=[
     path('team/<uuid:membership_id>/2fa-reset/',views.team_reset_two_factor,name='team_reset_two_factor'),
     path('portaal/toegang/<str:token>/',views.portal_token,name='portal_token'),path('portaal/',views.portal_home,name='portal_home'),path('portaal/ongeldig/',views.portal_invalid,name='portal_invalid'),path('portaal/uitloggen/',views.portal_logout,name='portal_logout'),path('portaal/offertes/<uuid:quote_id>/pdf/',views.portal_quote_pdf,name='portal_quote_pdf'),path('portaal/offertes/<uuid:quote_id>/beslissen/',views.portal_quote_decide,name='portal_quote_decide'),path('portaal/facturen/<uuid:invoice_id>/pdf/',views.portal_invoice_pdf,name='portal_invoice_pdf'),path('portaal/documenten/<uuid:document_id>/',views.portal_document_download,name='portal_document_download'),
     path('rapportages/',views.reports,name='reports'),path('beheer/systeem/',views.system_info,name='system_info'),
+    path('werkruimte/',extensions.operations_hub,name='operations_hub'),
+    path('communicatie/',extensions.communication_list,name='communication_list'),path('communicatie/nieuw/',extensions.communication_create,name='communication_create'),path('communicatie/<uuid:communication_id>/versturen/',extensions.communication_send,name='communication_send'),
+    path('contracten/',extensions.contract_list,name='contract_list'),path('contracten/nieuw/',extensions.contract_form,name='contract_create'),path('contracten/<uuid:contract_id>/',extensions.contract_form,name='contract_edit'),
+    path('service/',extensions.ticket_list,name='ticket_list'),path('service/nieuw/',extensions.ticket_form,name='ticket_create'),path('service/<uuid:ticket_id>/',extensions.ticket_form,name='ticket_edit'),
+    path('werkbonnen/',extensions.work_order_list,name='work_order_list'),path('werkbonnen/nieuw/',extensions.work_order_form,name='work_order_create'),path('werkbonnen/<uuid:work_order_id>/',extensions.work_order_form,name='work_order_edit'),path('werkbonnen/<uuid:work_order_id>/foto/',extensions.work_order_photo,name='work_order_photo'),
+    path('voorraad/',extensions.inventory,name='inventory'),path('voorraad/mutatie/',extensions.stock_movement,name='stock_movement'),path('bank/importeren/',extensions.bank_import,name='bank_import'),
+    path('beheer/documentsjablonen/',extensions.template_list,name='template_list'),path('beheer/documentsjablonen/nieuw/',extensions.template_form,name='template_create'),path('beheer/documentsjablonen/<uuid:template_id>/',extensions.template_form,name='template_edit'),
+    path('beheer/integraties/',extensions.integration_list,name='integration_list'),path('beheer/integraties/nieuw/',extensions.integration_form,name='integration_create'),path('beheer/integraties/<uuid:integration_id>/',extensions.integration_form,name='integration_edit'),path('beheer/integraties/agenda/nieuw/',extensions.calendar_connection_form,name='calendar_connection_create'),path('beheer/integraties/agenda/<int:connection_id>/',extensions.calendar_connection_form,name='calendar_connection_edit'),
+    path('facturen/<uuid:invoice_id>/betaallink/',extensions.payment_link_create,name='payment_link_create'),path('api/mollie/webhook/',extensions.mollie_webhook,name='mollie_webhook'),path('api/v1/customers/',extensions.api_customers,name='api_customers'),path('api/v1/communications/',extensions.api_communications,name='api_communications'),
+    path('beheer/bewaking/',extensions.system_monitor,name='system_monitor'),path('beheer/bewaking/<uuid:alert_id>/oplossen/',extensions.alert_resolve,name='alert_resolve'),
+    path('ondertekeningen/',extensions.signature_list,name='signature_list'),path('ondertekeningen/nieuw/',extensions.signature_create,name='signature_create'),path('ondertekenen/<str:token>/',extensions.signature_public,name='signature_public'),
+    path('importeren/',extensions.data_import,name='data_import'),path('beheer/integraties/<uuid:integration_id>/test/',extensions.webhook_test,name='webhook_test'),path('beheer/integraties/agenda/<int:connection_id>/synchroniseren/',extensions.calendar_sync,name='calendar_sync'),path('agenda/export.ics',extensions.calendar_ics,name='calendar_ics'),
+    path('service-worker.js',extensions.service_worker,name='service_worker'),
 ]

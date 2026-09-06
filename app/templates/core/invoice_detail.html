@@ -89,7 +89,7 @@
 <span class="eyebrow">BETALING BOEKEN</span>
 <form method="post" action="{% url 'payment_add' invoice.id %}">{% csrf_token %}{% for field in payment_form %}{% include 'core/form_field.html' with field=field %}{% endfor %}<button class="btn primary full">Betaling registreren</button>
 </form>
-</section>{% endif %}{% if invoice.kind == 'invoice' and invoice.status == 'sent' or invoice.kind == 'invoice' and invoice.status == 'partial' or invoice.kind == 'invoice' and invoice.status == 'paid' or invoice.kind == 'invoice' and invoice.status == 'overdue' %}<section class="card side-card">
+</section>{% endif %}{% if invoice.outstanding > 0 %}<section class="card side-card"><span class="eyebrow">ONLINE BETALEN</span>{% for link in invoice.payment_links.all %}{% if link.checkout_url %}<a class="btn primary full" rel="noopener" target="_blank" href="{{ link.checkout_url }}">Open betaallink</a>{% endif %}<small>{{ link.get_status_display }} · € {{ link.amount }}</small>{% empty %}<form method="post" action="{% url 'payment_link_create' invoice.id %}">{% csrf_token %}<button class="btn subtle full">Mollie-betaallink maken</button></form>{% endfor %}</section>{% endif %}{% if invoice.kind == 'invoice' and invoice.status == 'sent' or invoice.kind == 'invoice' and invoice.status == 'partial' or invoice.kind == 'invoice' and invoice.status == 'paid' or invoice.kind == 'invoice' and invoice.status == 'overdue' %}<section class="card side-card">
 <form method="post" action="{% url 'credit_create' invoice.id %}" onsubmit="return confirm('Volledige creditfactuur aanmaken?')">{% csrf_token %}<button class="btn subtle full">Creditfactuur aanmaken</button>
 </form>
 </section>{% endif %}</aside>

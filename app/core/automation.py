@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
-from .models import EmailTemplate, Invoice, InvoiceLine, PaymentReminder, RecurringInvoiceSchedule, ReminderPolicy
+from .models import EmailTemplate, Invoice, InvoiceLine, Organization, PaymentReminder, RecurringInvoiceSchedule, ReminderPolicy, SystemAlert
 
 DEFAULT_TEMPLATES={
     EmailTemplate.Kind.REMINDER1:('Herinnering factuur {{ factuurnummer }}','Beste {{ klantnaam }},\n\nDe betalingstermijn van factuur {{ factuurnummer }} is verstreken. Het openstaande bedrag is € {{ bedrag }}.'),
@@ -43,3 +43,18 @@ def queue_payment_reminders(today=None):
             if template: subject,body=template.subject,template.body
             queued.append(PaymentReminder.objects.create(organization=policy.organization,invoice=invoice,level=level,recipient=invoice.customer.email,subject=render_template(subject,invoice),body=render_template(body,invoice)))
     return queued
+
+def refresh_system_alerts(today=None):
+    today=today or timezone.localdate(); created=[]
+    for org in Organization.objects.filter(is_active=True):
+        conditions=[]
+        low=[p for p in org.products.filter(track_stock=True,is_active=True) if p.stock_quantity<=p.minimum_stock]
+        if low: conditions.append(('low_stock','warning','Voorraad aanvullen',f'{len(low)} product(en) staan op of onder de minimumvoorraad.'))
+        expiring=org.contracts.filter(status='active',end_date__isnull=False,end_date__lte=today+timedelta(days=30),end_date__gte=today)
+        if expiring.exists(): conditions.append(('contracts_expiring','warning','Contracten lopen af',f'{expiring.count()} contract(en) lopen binnen 30 dagen af.'))
+        if org.communications.filter(status='failed').exists(): conditions.append(('email_failed','critical','E-mailfouten',f'{org.communications.filter(status="failed").count()} bericht(en) konden niet worden verzonden.'))
+        if org.webhook_deliveries.filter(status='failed').exists(): conditions.append(('webhook_failed','warning','Webhookfouten',f'{org.webhook_deliveries.filter(status="failed").count()} webhook(s) zijn mislukt.'))
+        for code,severity,title,details in conditions:
+            alert,new=SystemAlert.objects.get_or_create(organization=org,code=code,is_resolved=False,defaults={'severity':severity,'title':title,'details':details})
+            if new: created.append(alert)
+    return created

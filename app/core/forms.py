@@ -1,7 +1,7 @@
 from django import forms
 from decimal import Decimal
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from .models import Appointment, AppointmentType, BackupConfiguration, Board, BoardColumn, Contact, Customer, EmailTemplate, Expense, Invoice, InvoiceLine, Membership, MileageEntry, Opportunity, Organization, OrganizationEmailSettings, Payment, Product, Project, ProjectDocument, Quote, QuoteLine, RecurringInvoiceSchedule, ReminderPolicy, Task, TaskAttachment, TimeEntry, User
+from .models import Appointment, AppointmentType, BackupConfiguration, BankTransaction, Board, BoardColumn, CalendarConnection, Communication, Contact, Contract, Customer, DocumentTemplate, EmailTemplate, Expense, IntegrationEndpoint, Invoice, InvoiceLine, Membership, MileageEntry, Opportunity, Organization, OrganizationEmailSettings, Payment, Product, Project, ProjectDocument, Quote, QuoteLine, RecurringInvoiceSchedule, ReminderPolicy, ServiceTicket, StockMovement, Task, TaskAttachment, TimeEntry, User, WorkOrder
 
 class LoginForm(AuthenticationForm):
     username=forms.EmailField(label='E-mailadres',widget=forms.EmailInput(attrs={'autofocus':True,'autocomplete':'email','placeholder':'naam@bedrijf.nl'}))
@@ -101,7 +101,7 @@ class CsvImportForm(forms.Form):
         return f
 
 class ProductForm(forms.ModelForm):
-    class Meta: model=Product; fields=('code','name','description','kind','unit','unit_price','vat_rate','is_active'); widgets={'description':forms.Textarea(attrs={'rows':3})}
+    class Meta: model=Product; fields=('code','name','description','kind','unit','unit_price','purchase_price','vat_rate','track_stock','stock_quantity','minimum_stock','is_active'); widgets={'description':forms.Textarea(attrs={'rows':3})}
     def __init__(self,*args,organization=None,**kwargs): super().__init__(*args,**kwargs); self.organization=organization
     def save(self,commit=True):
         obj=super().save(False); obj.organization=self.organization
@@ -322,3 +322,85 @@ class ReminderPolicyForm(forms.ModelForm):
 
 class EmailTemplateForm(forms.ModelForm):
     class Meta: model=EmailTemplate; fields=('subject','body'); widgets={'body':forms.Textarea(attrs={'rows':10})}; labels={'subject':'Onderwerp','body':'Bericht'}
+
+class TenantModelForm(forms.ModelForm):
+    def __init__(self,*args,organization=None,**kwargs): super().__init__(*args,**kwargs); self.organization=organization
+    def save(self,commit=True):
+        obj=super().save(False); obj.organization=self.organization
+        if commit: obj.save(); self.save_m2m()
+        return obj
+
+class CommunicationForm(TenantModelForm):
+    class Meta: model=Communication; fields=('customer','contact','recipient','subject','body'); widgets={'body':forms.Textarea(attrs={'rows':8})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,organization=organization,**kwargs); self.fields['customer'].queryset=organization.customers.all(); self.fields['contact'].queryset=organization.contacts.filter(is_active=True)
+
+class ContractForm(TenantModelForm):
+    class Meta: model=Contract; fields=('customer','title','status','start_date','end_date','notice_days','auto_renew','value','owner','terms'); widgets={'start_date':forms.DateInput(attrs={'type':'date'}),'end_date':forms.DateInput(attrs={'type':'date'}),'terms':forms.Textarea(attrs={'rows':6})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,organization=organization,**kwargs); self.fields['customer'].queryset=organization.customers.all(); self.fields['owner'].queryset=organization.memberships.filter(is_active=True,is_removed=False)
+    def clean(self):
+        data=super().clean()
+        if data.get('end_date') and data.get('start_date') and data['end_date']<data['start_date']: self.add_error('end_date','Einddatum ligt vóór de startdatum.')
+        return data
+
+class ServiceTicketForm(TenantModelForm):
+    class Meta: model=ServiceTicket; fields=('customer','subject','description','status','priority','assignee','due_at'); widgets={'description':forms.Textarea(attrs={'rows':6}),'due_at':forms.DateTimeInput(attrs={'type':'datetime-local'})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,organization=organization,**kwargs); self.fields['customer'].queryset=organization.customers.all(); self.fields['assignee'].queryset=organization.memberships.filter(is_active=True,is_removed=False)
+
+class WorkOrderForm(TenantModelForm):
+    class Meta: model=WorkOrder; fields=('customer','ticket','assigned_to','title','address','scheduled_start','scheduled_end','route_position','status','report','photo','customer_signature'); widgets={'scheduled_start':forms.DateTimeInput(attrs={'type':'datetime-local'}),'scheduled_end':forms.DateTimeInput(attrs={'type':'datetime-local'}),'report':forms.Textarea(attrs={'rows':5}),'photo':forms.ClearableFileInput(attrs={'accept':'image/*','capture':'environment'}),'customer_signature':forms.Textarea(attrs={'rows':2})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,organization=organization,**kwargs); self.fields['customer'].queryset=organization.customers.all(); self.fields['ticket'].queryset=organization.service_tickets.all(); self.fields['assigned_to'].queryset=organization.memberships.filter(is_active=True,is_removed=False)
+    def clean(self):
+        data=super().clean()
+        if data.get('scheduled_start') and data.get('scheduled_end') and data['scheduled_end']<=data['scheduled_start']: self.add_error('scheduled_end','Eindtijd moet na de starttijd liggen.')
+        photo=data.get('photo')
+        if photo and getattr(photo,'size',0)>10*1024*1024: self.add_error('photo','De foto is groter dan 10 MB.')
+        return data
+
+class StockMovementForm(TenantModelForm):
+    class Meta: model=StockMovement; fields=('product','kind','quantity','reason')
+    def __init__(self,*args,organization=None,**kwargs): super().__init__(*args,organization=organization,**kwargs); self.fields['product'].queryset=organization.products.filter(track_stock=True,is_active=True)
+
+class DocumentTemplateForm(TenantModelForm):
+    layout_order=forms.CharField(widget=forms.HiddenInput(),required=False)
+    class Meta: model=DocumentTemplate; fields=('kind','name','header','footer','primary_color','is_default'); widgets={'header':forms.Textarea(attrs={'rows':4}),'footer':forms.Textarea(attrs={'rows':4}),'primary_color':forms.TextInput(attrs={'type':'color'})}
+    def save(self,commit=True):
+        obj=super().save(False); obj.layout=[x for x in self.cleaned_data.get('layout_order','').split(',') if x in ('header','recipient','lines','totals','terms','footer')]
+        if commit:
+            if obj.is_default: DocumentTemplate.objects.filter(organization=self.organization,kind=obj.kind,is_default=True).exclude(pk=obj.pk).update(is_default=False)
+            obj.save()
+        return obj
+
+class CalendarConnectionForm(TenantModelForm):
+    secret=forms.CharField(required=False,widget=forms.PasswordInput(attrs={'autocomplete':'new-password'}))
+    class Meta: model=CalendarConnection; fields=('membership','provider','endpoint','account','calendar_id','enabled')
+    def __init__(self,*args,organization=None,**kwargs): super().__init__(*args,organization=organization,**kwargs); self.fields['membership'].queryset=organization.memberships.filter(is_active=True,is_removed=False)
+    def save(self,commit=True):
+        obj=super().save(False); from .encryption import encrypt_secret
+        if self.cleaned_data.get('secret'): obj.secret_encrypted=encrypt_secret(self.cleaned_data['secret'])
+        if commit: obj.save()
+        return obj
+
+class IntegrationEndpointForm(TenantModelForm):
+    secret=forms.CharField(required=False,widget=forms.PasswordInput(attrs={'autocomplete':'new-password'}))
+    events_text=forms.CharField(required=False,help_text='Komma-gescheiden gebeurtenissen')
+    class Meta: model=IntegrationEndpoint; fields=('kind','name','endpoint','enabled')
+    def save(self,commit=True):
+        obj=super().save(False); obj.events=[x.strip() for x in self.cleaned_data.get('events_text','').split(',') if x.strip()]
+        if self.cleaned_data.get('secret'): obj.set_secret(self.cleaned_data['secret'])
+        if commit: obj.save()
+        return obj
+
+class BankImportForm(forms.Form):
+    file=forms.FileField(label='CAMT/MT940/CSV-bankbestand')
+    def clean_file(self):
+        value=self.cleaned_data['file']
+        if value.size>10*1024*1024: raise forms.ValidationError('Bestand is groter dan 10 MB.')
+        return value
+
+class DataImportForm(BankImportForm):
+    entity=forms.ChoiceField(label='Gegevenstype',choices=(('customers','Klanten'),('products','Producten'),('contracts','Contracten')))
+    dry_run=forms.BooleanField(label='Alleen controleren',required=False,initial=True)

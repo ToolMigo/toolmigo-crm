@@ -22,7 +22,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 import pyotp, qrcode
-from .forms import AppointmentForm, BackupConfigurationForm, BoardColumnForm, BoardForm, ChecklistItemForm, ContactForm, CsvImportForm, CustomerForm, CustomerNoteForm, EmailTemplateForm, ExpenseForm, InvoiceForm, InvoiceLineForm, MileageEntryForm, OpportunityForm, OrganizationEmailSettingsForm, OrganizationSettingsForm, PaymentForm, ProductForm, ProfileForm, ProjectDocumentForm, ProjectForm, QuoteForm, QuoteLineForm, RecurringInvoiceScheduleForm, RejectionForm, ReminderPolicyForm, TaskAttachmentForm, TaskCommentForm, TaskForm, TeamMemberEditForm, TeamMemberForm, TimeEntryForm
+from .forms import AppointmentForm, BackupConfigurationForm, BoardColumnForm, BoardForm, ChecklistItemForm, ContactForm, CsvImportForm, CustomerForm, CustomerNoteForm, EmailTemplateForm, ExpenseForm, GlobalTimeEntryForm, InvoiceForm, InvoiceLineForm, MileageEntryForm, OpportunityForm, OrganizationEmailSettingsForm, OrganizationSettingsForm, PaymentForm, ProductForm, ProfileForm, ProjectDocumentForm, ProjectForm, QuoteForm, QuoteLineForm, RecurringInvoiceScheduleForm, RejectionForm, ReminderPolicyForm, TaskAttachmentForm, TaskCommentForm, TaskForm, TeamMemberEditForm, TeamMemberForm, TimeEntryForm
 from .models import Appointment, AppointmentType, AuditEvent, BackupConfiguration, Board, BoardColumn, Contact, Customer, CustomerActivity, DocumentSequence, EmailDelivery, EmailTemplate, Expense, Invoice, InvoiceLine, Membership, MileageEntry, Opportunity, OrganizationEmailSettings, Payment, PaymentReminder, PortalAccess, PortalDecision, Product, Project, ProjectDocument, Quote, QuoteLine, RecurringInvoiceSchedule, ReminderPolicy, Task, TaskAttachment, TaskChecklistItem, TaskComment, TimeEntry, User
 from .pdf import build_invoice_pdf, build_quote_pdf
 from .security import audit, owner_required, roles_required
@@ -720,6 +720,23 @@ def project_detail(request,project_id):
     project=scoped_project(request,project_id); return render(request,'core/project_detail.html',{'project':project,'time_form':TimeEntryForm(initial={'date':timezone.localdate()}),'mileage_form':MileageEntryForm(initial={'date':timezone.localdate()}),'expense_form':ExpenseForm(initial={'date':timezone.localdate()}),'document_form':ProjectDocumentForm()})
 
 @login_required
+def time_entry_list(request):
+    entries=request.organization.time_entries.select_related('project','project__customer','member__user','approved_by')
+    can_approve=request.membership.role in (Membership.Role.OWNER,Membership.Role.PROJECT_MANAGER)
+    if not can_approve: entries=entries.filter(member=request.membership)
+    status=request.GET.get('status','')
+    if status in TimeEntry.Status.values: entries=entries.filter(status=status)
+    total=sum((entry.hours for entry in entries),Decimal('0'))
+    return render(request,'core/time_entry_list.html',{'entries':entries[:250],'total_hours':total,'selected_status':status,'statuses':TimeEntry.Status.choices,'can_approve':can_approve})
+
+@login_required
+def time_entry_create(request):
+    form=GlobalTimeEntryForm(request.POST or None,organization=request.organization,initial={'date':timezone.localdate()})
+    if form.is_valid():
+        entry=form.save(False); entry.member=request.membership; entry.save(); audit(request,'time_entry.created',entry); messages.success(request,'Urenregistratie opgeslagen.'); return redirect('time_entry_list')
+    return render(request,'core/generic_form.html',{'form':form,'heading':'Uren registreren','cancel_url':reverse('time_entry_list')})
+
+@login_required
 @require_POST
 def time_entry_add(request,project_id):
     project=scoped_project(request,project_id); form=TimeEntryForm(request.POST)
@@ -730,13 +747,13 @@ def time_entry_add(request,project_id):
 @login_required
 @require_POST
 def time_entry_submit(request,entry_id):
-    entry=get_object_or_404(request.organization.time_entries,pk=entry_id,member=request.membership,status__in=[TimeEntry.Status.DRAFT,TimeEntry.Status.REJECTED]); entry.status=TimeEntry.Status.SUBMITTED; entry.save(update_fields=['status']); audit(request,'time_entry.submitted',entry); return redirect('project_detail',entry.project_id)
+    entry=get_object_or_404(request.organization.time_entries,pk=entry_id,member=request.membership,status__in=[TimeEntry.Status.DRAFT,TimeEntry.Status.REJECTED]); entry.status=TimeEntry.Status.SUBMITTED; entry.save(update_fields=['status']); audit(request,'time_entry.submitted',entry); return redirect('time_entry_list') if request.POST.get('next')=='time_entry_list' else redirect('project_detail',entry.project_id)
 
 @login_required
 @roles_required(Membership.Role.OWNER,Membership.Role.PROJECT_MANAGER)
 @require_POST
 def time_entry_approve(request,entry_id):
-    entry=get_object_or_404(request.organization.time_entries,pk=entry_id,status=TimeEntry.Status.SUBMITTED); entry.status=TimeEntry.Status.APPROVED; entry.approved_by=request.user; entry.save(update_fields=['status','approved_by']); audit(request,'time_entry.approved',entry); return redirect('project_detail',entry.project_id)
+    entry=get_object_or_404(request.organization.time_entries,pk=entry_id,status=TimeEntry.Status.SUBMITTED); entry.status=TimeEntry.Status.APPROVED; entry.approved_by=request.user; entry.save(update_fields=['status','approved_by']); audit(request,'time_entry.approved',entry); return redirect('time_entry_list') if request.POST.get('next')=='time_entry_list' else redirect('project_detail',entry.project_id)
 
 @login_required
 @require_POST

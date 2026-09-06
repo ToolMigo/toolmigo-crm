@@ -32,7 +32,7 @@
 <a {% if 'customer' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'customer_list' %}">
 <i>♙</i>Klanten</a>
 <a {% if 'opportunity' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'opportunity_list' %}"><i>◇</i>Verkoop</a>
-<a {% if 'project' in request.resolver_match.url_name or 'time_entry' in request.resolver_match.url_name or 'mileage' in request.resolver_match.url_name or 'expense' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'project_list' %}"><i>▣</i>Projecten</a>
+<a {% if 'project' in request.resolver_match.url_name or request.resolver_match.url_name == 'time_entry_add' or 'mileage' in request.resolver_match.url_name or 'expense' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'project_list' %}"><i>▣</i>Projecten</a>
 <a {% if 'quote' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'quote_list' %}">
 <i>▤</i>Offertes</a>
 <a {% if 'invoice' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'invoice_list' %}">
@@ -43,6 +43,8 @@
 {% if active_membership.role == 'owner' or active_membership.role == 'approver' %}<a {% if request.resolver_match.url_name == 'reports' %}class="active"{% endif %} href="{% url 'reports' %}"><i>⌁</i>Rapportages</a>{% endif %}
 <a {% if request.resolver_match.url_name == 'calendar' or 'appointment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'calendar' %}">
 <i>□</i>Agenda</a>
+<a {% if request.resolver_match.url_name == 'time_entry_list' or request.resolver_match.url_name == 'time_entry_create' %}class="active"{% endif %} href="{% url 'time_entry_list' %}"><i>⏱</i>Urenregistratie</a>
+{% if active_membership.role == 'owner' or active_membership.role == 'planner' or active_membership.role == 'project_manager' or active_membership.role == 'support' %}<a {% if 'work_order' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'work_order_list' %}"><i>⚒</i>Werkbonnen</a>{% endif %}
 <a {% if request.resolver_match.url_name == 'board_list' or request.resolver_match.url_name == 'board_create' or request.resolver_match.url_name == 'board_detail' or 'task' in request.resolver_match.url_name or 'checklist' in request.resolver_match.url_name or 'column' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'board_list' %}">
 <i>✓</i>Taken
 </a><a {% if request.resolver_match.url_name == 'operations_hub' or 'communication' in request.resolver_match.url_name or 'contract' in request.resolver_match.url_name or 'ticket' in request.resolver_match.url_name or 'work_order' in request.resolver_match.url_name %}class="active"{% endif %} href="{% url 'operations_hub' %}"><i>◫</i>Werkruimte</a>{% if active_membership.role == 'owner' %}<span class="nav-label">Beheer</span>

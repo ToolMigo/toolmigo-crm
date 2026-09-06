@@ -279,6 +279,13 @@ class TimeEntryForm(forms.ModelForm):
         if value<=0 or value>24: raise forms.ValidationError('Uren moeten tussen 0 en 24 liggen.')
         return value
 
+class GlobalTimeEntryForm(TimeEntryForm):
+    class Meta: model=TimeEntry; fields=('project','date','hours','hourly_rate','description'); widgets={'date':forms.DateInput(attrs={'type':'date'})}
+    def __init__(self,*args,organization=None,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.fields['project'].queryset=organization.projects.exclude(status=Project.Status.CANCELLED).select_related('customer') if organization else Project.objects.none()
+        self.fields['project'].label_from_instance=lambda project:f'{project.name} · {project.customer}'
+
 class MileageEntryForm(forms.ModelForm):
     class Meta: model=MileageEntry; fields=('date','kilometers','rate','description'); widgets={'date':forms.DateInput(attrs={'type':'date'})}
 
